@@ -8,7 +8,7 @@ Guía paso a paso. La app sigue usando el catálogo en código (`ingredients.see
 
 1. Entra en [https://supabase.com](https://supabase.com) e inicia sesión (GitHub o email).
 2. **New project**
-3. Nombre: `safebyte` (o el que quieras)
+3. Nombre: `safebite` (o el que quieras)
 4. **Database password**: guárdala en un gestor de contraseñas (solo la usarás para acceso directo a Postgres; la app usa la API).
 5. **Region**: elige la más cercana (p. ej. `West EU` si estás en España).
 6. Plan **Free** → **Create new project** (tarda 1–2 minutos).
@@ -39,7 +39,7 @@ La lista a evitar en la nube referencia `ingredients.id`; hay que cargar el cat�
 **Opción A — desde tu Mac (recomendado si cambias el seed):**
 
 ```bash
-cd /Users/718575/Projects/app/safebyte
+cd /Users/718575/Projects/app/safebite
 npm install
 npm run db:seed-sql
 ```
@@ -56,7 +56,10 @@ Comprueba en **Table Editor** → `ingredients` que hay filas (100+).
 
 1. **Authentication** → **Providers**
 2. **Email** debe estar **Enabled** (por defecto sí).
-3. Para pruebas rápidas puedes desactivar *Confirm email* en **Authentication** → **Sign In / Providers** → Email → desmarcar *Confirm email* (opcional).
+3. **Confirm email** (por defecto activado en Supabase):
+   - Tras registrarse, el usuario debe abrir el enlace del email antes de poder hacer login.
+   - Si el login falla con `email_not_confirmed`, la app muestra el aviso y permite **Reenviar email**.
+   - Para **desarrollo/pruebas** puedes desactivarlo: **Authentication** → **Sign In / Providers** → **Email** → desmarcar *Confirm email* (no recomendado en producción).
 
 Al registrarse un usuario, el trigger `handle_new_user` crea filas en `profiles` y `family_profiles`.
 
@@ -125,5 +128,6 @@ Tras crear un usuario de prueba en **Authentication** → **Users** → **Add us
 | FK al insertar avoid list | Ejecuta antes `seed-ingredients.sql` |
 | La app no lee `.env` | Reinicia con `npx expo start --clear` |
 | No aparece perfil tras signup | Revisa que el trigger `on_auth_user_created` exista (final de `schema.sql`) |
+| Login 400 `email_not_confirmed` | Abre el enlace del email de confirmación, o desactiva *Confirm email* en Auth (solo dev) |
 
 ¿Siguiente paso? Conectar **login** y **lista a evitar** a Supabase cuando quieras; dímelo y lo implementamos en el código.

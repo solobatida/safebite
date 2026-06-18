@@ -4,7 +4,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { IngredientSearch, AvoidList } from '@/components/IngredientSearch';
 import { ProfileSwitcher } from '@/components/ProfileSwitcher';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { getSession, getAvoidList, setAvoidList, clearSession, getProfiles } from '@/lib/storage';
+import { getSession, getAvoidList, setAvoidList, clearSession, getProfiles, isGuestSession } from '@/lib/storage';
 import { FEATURES } from '@/constants/features';
 import { loadIngredients, addCustomIngredient } from '@/lib/ingredients';
 import { t } from '@/i18n/translations';
@@ -21,6 +21,7 @@ export default function PreferencesScreen() {
   const [catalog, setCatalog] = useState<Ingredient[]>([]);
   const [customModal, setCustomModal] = useState(false);
   const [customName, setCustomName] = useState('');
+  const [isGuest, setIsGuest] = useState(false);
 
   const refresh = useCallback(async () => {
     const session = await getSession();
@@ -28,6 +29,7 @@ export default function PreferencesScreen() {
       router.replace('/');
       return;
     }
+    setIsGuest(isGuestSession(session));
     setLang(session.uiLanguage);
     setAccountNickname(session.accountNickname);
     setActiveProfileId(session.activeProfileId);
@@ -79,6 +81,12 @@ export default function PreferencesScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>{t(lang, 'preferencesTitle')}</Text>
+
+      {isGuest ? (
+        <Text style={styles.guestBanner}>
+          Modo amigo — tus ingredientes no se guardan al cerrar la app.
+        </Text>
+      ) : null}
 
       <ProfileSwitcher
         lang={lang}
@@ -133,7 +141,7 @@ export default function PreferencesScreen() {
         style={{ marginTop: spacing.md }}
       />
       <PrimaryButton
-        label={t(lang, 'signOut')}
+        label={isGuest ? 'Salir (modo amigo)' : t(lang, 'signOut')}
         variant="danger"
         onPress={async () => {
           await clearSession();
@@ -148,6 +156,14 @@ export default function PreferencesScreen() {
 const styles = StyleSheet.create({
   container: { padding: spacing.lg },
   title: { fontSize: 20, fontWeight: '700', marginBottom: spacing.md, color: colors.text },
+  guestBanner: {
+    fontSize: 13,
+    color: colors.primaryDark,
+    backgroundColor: '#E8F5EE',
+    padding: spacing.sm,
+    borderRadius: 8,
+    marginBottom: spacing.md,
+  },
   profileSubtitle: { fontSize: 14, color: colors.primaryDark, fontWeight: '600', marginBottom: spacing.md },
   listTitle: { fontWeight: '600', marginTop: spacing.lg, marginBottom: spacing.sm },
   modalBackdrop: {

@@ -1,24 +1,37 @@
-import { View, StyleSheet } from 'react-native';
+import { View, Image, ImageBackground, StyleSheet } from 'react-native';
 import { colors } from '@/constants/theme';
 
-/** Supermarket shelf + comic boom backdrop for welcome screen */
+/** Fraction of the photo height to hide (supermarket aisle at the top). */
+const CROP_TOP_RATIO = 0.22;
+
+const supermarketShelves = require('../../assets/images/supermarket-shelves.png');
+const boomBurst = require('../../assets/images/boom-burst.png');
+
+/** Supermarket shelf photo + comic burst behind the welcome card */
 export function ShelfBackground({ children }: { children: React.ReactNode }) {
+  const imageHeight = `${100 / (1 - CROP_TOP_RATIO)}%`;
+  const imageTop = `${(-CROP_TOP_RATIO / (1 - CROP_TOP_RATIO)) * 100}%`;
+
   return (
     <View style={styles.root}>
-      <View style={styles.shelfTop} />
-      <View style={styles.shelfRow}>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <View key={i} style={[styles.product, { height: 40 + (i % 3) * 18 }]} />
-        ))}
+      <View style={styles.imageClip}>
+        <ImageBackground
+          source={supermarketShelves}
+          style={[styles.image, { height: imageHeight, top: imageTop }]}
+          resizeMode="cover"
+        />
       </View>
-      <View style={styles.shelfMid} />
-      <View style={styles.shelfRow}>
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <View key={i} style={[styles.productAlt, { height: 32 + (i % 4) * 14 }]} />
-        ))}
-      </View>
-      <View style={styles.boom}>
-        <View style={styles.boomInner}>{children}</View>
+      <View style={styles.scrim} />
+      <View style={styles.content}>
+        <View style={styles.heroStack}>
+          <Image
+            source={boomBurst}
+            style={styles.boomBurst}
+            resizeMode="contain"
+            accessibilityIgnoresInvertColors
+          />
+          <View style={styles.card}>{children}</View>
+        </View>
       </View>
     </View>
   );
@@ -27,64 +40,52 @@ export function ShelfBackground({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.shelfDark,
-    paddingTop: 48,
+    backgroundColor: '#2a2a2a',
   },
-  shelfTop: {
-    height: 8,
-    backgroundColor: colors.shelfMid,
-    marginHorizontal: 12,
-    borderRadius: 4,
+  imageClip: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
   },
-  shelfRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-around',
-    paddingHorizontal: 8,
-    paddingTop: 12,
-    minHeight: 100,
-    backgroundColor: '#4E342E',
-    marginHorizontal: 12,
-    borderBottomWidth: 6,
-    borderBottomColor: colors.shelfMid,
+  image: {
+    width: '100%',
+    position: 'absolute',
+    left: 0,
+    right: 0,
   },
-  product: {
-    width: 36,
-    backgroundColor: '#81C784',
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#2E7D32',
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
-  productAlt: {
-    width: 32,
-    backgroundColor: '#64B5F6',
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#1565C0',
-  },
-  shelfMid: {
-    height: 12,
-    marginTop: 8,
-  },
-  boom: {
+  content: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
-  boomInner: {
-    backgroundColor: colors.boomYellow,
-    borderWidth: 4,
-    borderColor: colors.boomOrange,
-    borderRadius: 24,
-    padding: 28,
+  heroStack: {
     width: '100%',
     maxWidth: 340,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
     transform: [{ rotate: '-2deg' }],
+  },
+  /** Comic burst behind the card — transparent PNG, slightly larger than the box */
+  boomBurst: {
+    position: 'absolute',
+    width: '185%',
+    aspectRatio: 1,
+    zIndex: 0,
+  },
+  card: {
+    width: '100%',
+    zIndex: 1,
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: 28,
     shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    shadowOpacity: 0.22,
+    shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    elevation: 10,
   },
 });

@@ -3,11 +3,59 @@ import type { FamilyProfile, Ingredient, UiLanguage, UserSession } from '@/types
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 
 const KEYS = {
-  session: '@safebyte/session',
-  accounts: '@safebyte/accounts',
-  avoid: '@safebyte/avoid',
-  customIngredients: '@safebyte/custom_ingredients',
+  session: '@safebite/session',
+  accounts: '@safebite/accounts',
+  avoid: '@safebite/avoid',
+  customIngredients: '@safebite/custom_ingredients',
 };
+
+let storageMigrated = false;
+
+/** In-memory guest session — not persisted to AsyncStorage */
+let guestSession: UserSession | null = null;
+let guestAvoidList: string[] = [];
+let guestCustomIngredients: Ingredient[] = [];
+
+export function isGuestSession(session: UserSession | null): boolean {
+  return Boolean(session?.isGuest);
+}
+
+export async function createGuestSession(uiLanguage: UiLanguage): Promise<UserSession> {
+  const session: UserSession = {
+    email: 'guest@safebite.local',
+    userId: 'guest',
+    accountNickname: 'Guest',
+    activeProfileId: 'guest-profile',
+    activeProfileName: 'Guest',
+    uiLanguage,
+    isGuest: true,
+  };
+  guestSession = session;
+  guestAvoidList = [];
+  return session;
+}
+
+export function clearGuestSession(): void {
+  guestSession = null;
+  guestAvoidList = [];
+  guestCustomIngredients = [];
+}
+
+async function migrateLegacyStorageKeys(): Promise<void> {
+  if (storageMigrated) return;
+  storageMigrated = true;
+
+  const allKeys = await AsyncStorage.getAllKeys();
+  for (const key of allKeys) {
+    if (!key.startsWith('@safebyte/')) continue;
+    const newKey = key.replace('@safebyte/', '@safebite/');
+    const value = await AsyncStorage.getItem(key);
+    if (value !== null && (await AsyncStorage.getItem(newKey)) === null) {
+      await AsyncStorage.setItem(newKey, value);
+    }
+    await AsyncStorage.removeItem(key);
+  }
+}
 
 interface LocalAccount {
   passwordHash: string;
@@ -17,6 +65,10 @@ interface LocalAccount {
 }
 
 export async function getSession(): Promise<UserSession | null> {
+  if (guestSession) return guestSession;
+
+  await migrateLegacyStorageKeys();
+
   const raw = await AsyncStorage.getItem(KEYS.session);
   if (raw) {
     const session = JSON.parse(raw) as UserSession;
@@ -55,10 +107,15 @@ async function migrateSessionShape(session: UserSession): Promise<UserSession> {
 }
 
 export async function setSession(session: UserSession): Promise<void> {
+  if (session.isGuest) {
+    guestSession = session;
+    return;
+  }
   await AsyncStorage.setItem(KEYS.session, JSON.stringify(session));
 }
 
 export async function clearSession(): Promise<void> {
+  clearGuestSession();
   await AsyncStorage.removeItem(KEYS.session);
   if (supabaseEnabled && supabase) {
     await supabase.auth.signOut();
@@ -282,6 +339,15 @@ async function migrateLegacyAvoidList(email: string, profileId: string): Promise
 export async function getProfiles(): Promise<FamilyProfile[]> {
   const session = await getSession();
   if (!session) return [];
+  if (session.isGuest) {
+    return [
+      {
+        id: session.activeProfileId,
+        displayName: session.activeProfileName,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  }
   const account = await getLocalAccount(session.email);
   return account?.profiles ?? [];
 }
@@ -387,6 +453,8 @@ export async function updateUiLanguage(lang: UiLanguage): Promise<void> {
   if (!session) return;
   await setSession({ ...session, uiLanguage: lang });
 
+  if (session.isGuest) return;
+
   if (supabaseEnabled && supabase) {
     // Keep profile in sync for cloud accounts
     const { data } = await supabase.auth.getUser();
@@ -403,6 +471,8 @@ function avoidKey(email: string, profileId: string): string {
 export async function getAvoidList(): Promise<string[]> {
   const session = await getSession();
   if (!session) return [];
+
+  if (session.isGuest) return [...guestAvoidList];
 
   if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
     const { data, error } = await supabase
@@ -421,6 +491,11 @@ export async function getAvoidList(): Promise<string[]> {
 export async function setAvoidList(ids: string[]): Promise<void> {
   const session = await getSession();
   if (!session) throw new Error('Not signed in');
+
+  if (session.isGuest) {
+    guestAvoidList = [...ids];
+    return;
+  }
 
   if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
     // Replace set for this profile.
@@ -447,11 +522,19 @@ export async function setAvoidList(ids: string[]): Promise<void> {
 }
 
 export async function getCustomIngredients(): Promise<Ingredient[]> {
+  const session = await getSession();
+  if (session?.isGuest) return [...guestCustomIngredients];
   const raw = await AsyncStorage.getItem(KEYS.customIngredients);
   return raw ? JSON.parse(raw) : [];
 }
 
 export async function addCustomIngredient(entry: Ingredient): Promise<void> {
+  const session = await getSession();
+  if (session?.isGuest) {
+    if (guestCustomIngredients.some((i) => i.id === entry.id)) return;
+    guestCustomIngredients.push(entry);
+    return;
+  }
   const list = await getCustomIngredients();
   if (list.some((i) => i.id === entry.id)) return;
   list.push(entry);

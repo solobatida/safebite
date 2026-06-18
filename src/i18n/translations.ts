@@ -39,7 +39,7 @@ type Keys =
   | 'cancel';
 
 const en: Record<Keys, string> = {
-  slogan: 'Scan. Know. Eat safe.',
+  slogan: 'Scan. Smile. Bite.',
   enter: 'Enter',
   login: 'Login',
   email: 'Email',

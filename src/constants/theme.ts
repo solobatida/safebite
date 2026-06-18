@@ -10,6 +10,8 @@ export const colors = {
   shelfMid: '#5D4037',
   boomYellow: '#FFD54F',
   boomOrange: '#FF8F00',
+  boomBlue: '#1E4F8C',
+  boomMustard: '#C9A227',
   text: '#1A1A1A',
   textMuted: '#5C5C5C',
   white: '#FFFFFF',

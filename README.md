@@ -31,7 +31,7 @@ Full product specification: [SPECIFICATION.md](./SPECIFICATION.md)
 ### 2. Install and start
 
 ```bash
-cd /Users/718575/Projects/safebyte
+cd /Users/718575/Projects/app/safebite
 npm install
 npm start
 ```
