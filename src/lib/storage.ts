@@ -111,6 +111,8 @@ export async function setSession(session: UserSession): Promise<void> {
     guestSession = session;
     return;
   }
+  // Real login replaces guest mode completely
+  clearGuestSession();
   await AsyncStorage.setItem(KEYS.session, JSON.stringify(session));
 }
 
@@ -348,6 +350,31 @@ export async function getProfiles(): Promise<FamilyProfile[]> {
       },
     ];
   }
+
+  // Cloud account: profiles live in Supabase; session already has the active one
+  if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
+    const { data, error } = await supabase
+      .from('family_profiles')
+      .select('id,display_name,created_at')
+      .eq('account_id', session.userId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    if (data?.length) {
+      return data.map((row: { id: string; display_name: string; created_at: string }) => ({
+        id: row.id,
+        displayName: row.display_name,
+        createdAt: row.created_at,
+      }));
+    }
+    return [
+      {
+        id: session.activeProfileId,
+        displayName: session.activeProfileName || session.accountNickname,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  }
+
   const account = await getLocalAccount(session.email);
   return account?.profiles ?? [];
 }

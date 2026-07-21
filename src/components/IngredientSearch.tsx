@@ -4,7 +4,6 @@ import {
   TextInput,
   Text,
   Pressable,
-  FlatList,
   StyleSheet,
 } from 'react-native';
 import { searchIngredients, getDisplayLabel } from '@/lib/ingredients';
@@ -83,23 +82,21 @@ export function AvoidList({
     .map((id) => catalog.find((c) => c.id === id))
     .filter(Boolean) as Ingredient[];
 
+  if (items.length === 0) {
+    return <Text style={styles.empty}>Add ingredients you need to avoid.</Text>;
+  }
+
   return (
-    <FlatList
-      data={items}
-      keyExtractor={(item) => item.id}
-      style={styles.list}
-      ListEmptyComponent={
-        <Text style={styles.empty}>Add ingredients you need to avoid.</Text>
-      }
-      renderItem={({ item }) => (
-        <View style={styles.chip}>
+    <View style={styles.list}>
+      {items.map((item) => (
+        <View key={item.id} style={styles.chip}>
           <Text style={styles.chipText}>{getDisplayLabel(item, lang)}</Text>
           <Pressable onPress={() => onRemove(item.id)} hitSlop={8}>
             <Text style={styles.remove}>✕</Text>
           </Pressable>
         </View>
-      )}
-    />
+      ))}
+    </View>
   );
 }
 
@@ -129,7 +126,7 @@ const styles = StyleSheet.create({
   },
   suggestionText: { fontSize: 16, color: colors.text, fontWeight: '600' },
   category: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  list: { marginTop: spacing.md, maxHeight: 360 },
+  list: { marginTop: spacing.md },
   empty: { color: colors.textMuted, fontStyle: 'italic', marginTop: spacing.md },
   chip: {
     flexDirection: 'row',

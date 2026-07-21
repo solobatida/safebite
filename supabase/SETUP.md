@@ -52,6 +52,27 @@ Comprueba en **Table Editor** → `ingredients` que hay filas (100+).
 
 ---
 
+## 3.1 Vista admin: usuarios + ingredientes a evitar
+
+Para ver en el dashboard **qué usuario tiene qué lista**:
+
+1. **SQL** → **New query**
+2. Pega el contenido de [`admin-views.sql`](./admin-views.sql) → **Run**
+3. En **Table Editor** aparecen las vistas:
+   - `admin_user_avoid_summary` — **1 fila por cuenta**: email, nickname, nº de ingredientes, lista en una columna
+   - `admin_user_avoid_list` — **1 fila por ingrediente**: detalle (email + cada ingrediente)
+
+O en SQL Editor:
+
+```sql
+select * from public.admin_user_avoid_summary;
+select * from public.admin_user_avoid_list;
+```
+
+Estas vistas son solo para el panel de Supabase (no las usa la app móvil).
+
+---
+
 ## 4. Auth (email / contraseña)
 
 1. **Authentication** → **Providers**
@@ -115,8 +136,8 @@ Tras crear un usuario de prueba en **Authentication** → **Users** → **Add us
 |------|------------------|
 | 1 | `schema.sql` en SQL Editor |
 | 2 | `npm run db:seed-sql` → `seed-ingredients.sql` en SQL Editor |
-| 3 | `.env` con URL y anon key |
-| 4 | (Futuro) conectar login de la app a Supabase |
+| 3 | (Opcional) `admin-views.sql` → vistas de usuarios + listas |
+| 4 | `.env` con URL y anon key |
 
 ---
 

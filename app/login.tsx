@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   registerLocalUser,
   loginLocalUser,
   hasLocalAccount,
+  clearGuestSession,
 } from '@/lib/storage';
 import { LANGUAGES } from '@/constants/languages';
 import { colors, spacing } from '@/constants/theme';
@@ -35,6 +36,11 @@ export default function LoginScreen() {
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
   const [resendOk, setResendOk] = useState(false);
+
+  // Leaving guest mode when opening login/register
+  useEffect(() => {
+    clearGuestSession();
+  }, []);
 
   const clearFeedback = () => {
     setFormError(null);
@@ -121,6 +127,7 @@ export default function LoginScreen() {
               .eq('id', data.user.id);
           }
 
+          clearGuestSession();
           await ensureCloudAccountSession();
           router.replace('/preferences');
           return;
@@ -146,11 +153,13 @@ export default function LoginScreen() {
           throw new Error('Usuario no registrado. Crea una cuenta primero.');
         }
 
+        clearGuestSession();
         await ensureCloudAccountSession();
         router.replace('/preferences');
         return;
       }
 
+      clearGuestSession();
       if (isRegister) {
         await registerLocalUser(email, password, nickname.trim(), uiLanguage);
       } else {
