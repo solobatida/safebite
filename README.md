@@ -79,15 +79,15 @@ Resumen:
 
 ---
 
-## Publish to Apple & Google (later)
+## Publish to Apple & Google
 
-1. **Apple Developer Program** (~99 USD/year) + **Google Play** (~25 USD one-time).
-2. Install EAS: `npm install -g eas-cli`, then `eas build`.
-3. Add **Privacy Policy** URL, camera usage description (already in `app.json`).
-4. Do **not** claim medical diagnosis; keep the in-app disclaimer.
-5. If you add Google/Facebook login, Apple requires **Sign in with Apple** too.
+Checklist completo (privacidad, EAS env vars, ficha 0,99 €, build, submit):
 
-See [Expo submission docs](https://docs.expo.dev/submit/introduction/).
+→ **[`docs/PUBLISH.md`](./docs/PUBLISH.md)**
+
+También: [`docs/privacy-policy.html`](./docs/privacy-policy.html) · [`docs/STORE_LISTING.md`](./docs/STORE_LISTING.md)
+
+Resumen: Apple Developer + Google Play, URL de privacidad pública, secretos `EXPO_PUBLIC_SUPABASE_*` en EAS, capturas, precio 0,99 €, `eas build` / `eas submit`.
 
 ---
 
