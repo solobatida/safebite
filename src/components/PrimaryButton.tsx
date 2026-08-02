@@ -1,5 +1,6 @@
 import { Pressable, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { colors, spacing } from '@/constants/theme';
+import { fonts } from '@/constants/fonts';
 
 export function PrimaryButton({
   label,
@@ -55,7 +56,7 @@ const styles = StyleSheet.create({
   label: {
     color: colors.white,
     fontSize: 17,
-    fontWeight: '700',
+    fontFamily: fonts.bold,
   },
   labelSecondary: {
     color: colors.primaryDark,

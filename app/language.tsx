@@ -1,42 +1,35 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { getSession, setSession, updateUiLanguage, registerLocalUser } from '@/lib/storage';
+import { createGuestSession } from '@/lib/storage';
+import { LANGUAGES } from '@/constants/languages';
+import { t } from '@/i18n/translations';
 import type { UiLanguage } from '@/types';
 import { colors, spacing } from '@/constants/theme';
 
-const LANGUAGES: { code: UiLanguage; label: string }[] = [
-  { code: 'en', label: 'English' },
-  { code: 'it', label: 'Italiano' },
-  { code: 'fr', label: 'Français' },
-  { code: 'de', label: 'Deutsch' },
-  { code: 'es', label: 'Español' },
-  { code: 'pt', label: 'Português' },
-  { code: 'ru', label: 'Русский' },
-  { code: 'ar', label: 'العربية' },
-];
-
 export default function LanguageScreen() {
   const router = useRouter();
-  const [selected, setSelected] = useState<UiLanguage>('en');
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const isGuest = mode === 'guest';
+  const [selected, setSelected] = useState<UiLanguage>('es');
 
   const continueFlow = async () => {
-    let session = await getSession();
-    if (!session) {
-      session = await registerLocalUser('guest@safebite.local', 'guestpass8', 'Guest', selected);
-    } else {
-      await updateUiLanguage(selected);
-      session = { ...session, uiLanguage: selected };
-      await setSession(session);
+    if (isGuest) {
+      await createGuestSession(selected);
+      router.replace('/preferences');
+      return;
     }
-    router.replace('/preferences');
+    router.replace('/');
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Choose your language</Text>
-      <Text style={styles.sub}>UI language for menus and results.</Text>
+      <Stack.Screen options={{ title: t(selected, 'navLanguage') }} />
+      <Text style={styles.title}>{t(selected, 'languageTitle')}</Text>
+      <Text style={styles.sub}>
+        {isGuest ? t(selected, 'languageGuestHint') : t(selected, 'languageHint')}
+      </Text>
       {LANGUAGES.map((l) => (
         <Pressable
           key={l.code}
@@ -46,7 +39,11 @@ export default function LanguageScreen() {
           <Text style={styles.rowText}>{l.label}</Text>
         </Pressable>
       ))}
-      <PrimaryButton label="Continue" onPress={continueFlow} style={{ marginTop: spacing.lg }} />
+      <PrimaryButton
+        label={t(selected, 'continue')}
+        onPress={continueFlow}
+        style={{ marginTop: spacing.lg }}
+      />
     </View>
   );
 }

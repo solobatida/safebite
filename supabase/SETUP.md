@@ -8,7 +8,7 @@ Guía paso a paso. La app sigue usando el catálogo en código (`ingredients.see
 
 1. Entra en [https://supabase.com](https://supabase.com) e inicia sesión (GitHub o email).
 2. **New project**
-3. Nombre: `safebyte` (o el que quieras)
+3. Nombre: `safebite` (o el que quieras)
 4. **Database password**: guárdala en un gestor de contraseñas (solo la usarás para acceso directo a Postgres; la app usa la API).
 5. **Region**: elige la más cercana (p. ej. `West EU` si estás en España).
 6. Plan **Free** → **Create new project** (tarda 1–2 minutos).
@@ -39,7 +39,7 @@ La lista a evitar en la nube referencia `ingredients.id`; hay que cargar el cat�
 **Opción A — desde tu Mac (recomendado si cambias el seed):**
 
 ```bash
-cd /Users/718575/Projects/app/safebyte
+cd /Users/718575/Projects/app/safebite
 npm install
 npm run db:seed-sql
 ```
@@ -52,13 +52,65 @@ Comprueba en **Table Editor** → `ingredients` que hay filas (100+).
 
 ---
 
+## 3.1 Vista admin: usuarios + ingredientes a evitar
+
+Para ver en el dashboard **qué usuario tiene qué lista**:
+
+1. **SQL** → **New query**
+2. Pega el contenido de [`admin-views.sql`](./admin-views.sql) → **Run**
+3. En **Table Editor** aparecen las vistas:
+   - `admin_user_avoid_summary` — **1 fila por cuenta**: email, nickname, nº de ingredientes, lista en una columna
+   - `admin_user_avoid_list` — **1 fila por ingrediente**: detalle (email + cada ingrediente)
+
+O en SQL Editor:
+
+```sql
+select * from public.admin_user_avoid_summary;
+select * from public.admin_user_avoid_list;
+```
+
+Estas vistas son solo para el panel de Supabase (no las usa la app móvil).
+
+### Ingredientes custom (añadir desde la app)
+
+Si al guardar un ingrediente nuevo falla, ejecuta en SQL Editor:
+
+[`ingredients-custom-policy.sql`](./ingredients-custom-policy.sql)
+
+Así los usuarios autenticados pueden insertar filas `custom-%` en `ingredients` (necesario por la FK de la lista a evitar). El nombre se copia a todos los idiomas del catálogo.
+
+---
+
 ## 4. Auth (email / contraseña)
 
 1. **Authentication** → **Providers**
 2. **Email** debe estar **Enabled** (por defecto sí).
-3. Para pruebas rápidas puedes desactivar *Confirm email* en **Authentication** → **Sign In / Providers** → Email → desmarcar *Confirm email* (opcional).
+3. **Confirm email** (por defecto activado en Supabase):
+   - Tras registrarse, el usuario debe abrir el enlace del email antes de poder hacer login.
+   - Si el login falla con `email_not_confirmed`, la app muestra el aviso y permite **Reenviar email**.
+   - Para **desarrollo/pruebas** puedes desactivarlo: **Authentication** → **Sign In / Providers** → **Email** → desmarcar *Confirm email* (no recomendado en producción).
 
 Al registrarse un usuario, el trigger `handle_new_user` crea filas en `profiles` y `family_profiles`.
+
+### Google Login
+
+1. En [Google Cloud Console](https://console.cloud.google.com/) crea un proyecto OAuth:
+   - Consent screen
+   - Credenciales → **OAuth client ID** tipo **Web**
+2. En Supabase → **Authentication** → **Providers** → **Google** → Enable  
+   Pega el **Client ID** y **Client Secret** del cliente Web.
+3. **Authentication** → **URL Configuration** → Redirect URLs, añade:
+   - `safebite://auth/callback`
+   - `safebite://auth/reset`
+   - `http://localhost:8081/auth/callback` (pruebas en web)
+   - `http://localhost:8081/auth/reset`
+   - (Expo Go) la URL que te dé `Linking.createURL` / `exp://…` al probar
+4. En SQL Editor ejecuta [`update-handle-new-user.sql`](./update-handle-new-user.sql) para nicknames de Google.
+
+### Recuperar contraseña
+
+La app usa `resetPasswordForEmail`. El usuario recibe un email de Supabase, abre el enlace y llega a la pantalla `auth/reset` para poner una nueva clave.  
+Asegúrate de que las Redirect URLs incluyan `safebite://auth/reset`.
 
 ---
 
@@ -112,8 +164,8 @@ Tras crear un usuario de prueba en **Authentication** → **Users** → **Add us
 |------|------------------|
 | 1 | `schema.sql` en SQL Editor |
 | 2 | `npm run db:seed-sql` → `seed-ingredients.sql` en SQL Editor |
-| 3 | `.env` con URL y anon key |
-| 4 | (Futuro) conectar login de la app a Supabase |
+| 3 | (Opcional) `admin-views.sql` → vistas de usuarios + listas |
+| 4 | `.env` con URL y anon key |
 
 ---
 
@@ -125,5 +177,6 @@ Tras crear un usuario de prueba en **Authentication** → **Users** → **Add us
 | FK al insertar avoid list | Ejecuta antes `seed-ingredients.sql` |
 | La app no lee `.env` | Reinicia con `npx expo start --clear` |
 | No aparece perfil tras signup | Revisa que el trigger `on_auth_user_created` exista (final de `schema.sql`) |
+| Login 400 `email_not_confirmed` | Abre el enlace del email de confirmación, o desactiva *Confirm email* en Auth (solo dev) |
 
 ¿Siguiente paso? Conectar **login** y **lista a evitar** a Supabase cuando quieras; dímelo y lo implementamos en el código.

@@ -1,35 +1,54 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { useEffect } from 'react';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ShelfBackground } from '@/components/ShelfBackground';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { getSession } from '@/lib/storage';
+import { getSession, isGuestSession } from '@/lib/storage';
+import { t } from '@/i18n/translations';
+import { fonts } from '@/constants/fonts';
 import { colors, spacing } from '@/constants/theme';
+import type { UiLanguage } from '@/types';
+
+const welcomeLogo = require('../assets/images/welcome-logo.png');
+const LOGO_SIZE = 188;
+/** Welcome is before language pick — Spanish default matches primary audience. */
+const DEFAULT_LANG: UiLanguage = 'es';
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const lang = DEFAULT_LANG;
 
-  const onEnter = async () => {
-    const session = await getSession();
-    if (session) {
-      router.replace('/preferences');
-    } else {
-      router.push('/language');
-    }
-  };
+  useEffect(() => {
+    (async () => {
+      const session = await getSession();
+      if (session && !isGuestSession(session)) {
+        router.replace('/preferences');
+      }
+    })();
+  }, [router]);
 
   return (
-    <ShelfBackground>
-      <Text style={styles.logo}>SafeBite</Text>
-      <Text style={styles.slogan}>Scan. Know. Eat safe.</Text>
-      <Text style={styles.sub}>
-        Scan barcodes in the supermarket and check ingredients in your language.
-      </Text>
+    <ShelfBackground
+      logo={
+        <Image
+          source={welcomeLogo}
+          style={styles.logo}
+          accessibilityLabel="SafeBite"
+        />
+      }
+    >
+      <Text style={styles.title}>SafeBite</Text>
+      <Text style={styles.slogan}>{t(lang, 'slogan')}</Text>
+      <Text style={styles.sub}>{t(lang, 'welcomeSub')}</Text>
       <View style={styles.actions}>
-        <PrimaryButton label="Enter" onPress={onEnter} />
         <PrimaryButton
-          label="Login"
-          variant="secondary"
+          label={t(lang, 'loginOrRegister')}
           onPress={() => router.push('/login')}
+        />
+        <PrimaryButton
+          label={t(lang, 'enterAsGuest')}
+          variant="secondary"
+          onPress={() => router.push('/language?mode=guest')}
           style={{ marginTop: spacing.sm }}
         />
       </View>
@@ -39,24 +58,30 @@ export default function WelcomeScreen() {
 
 const styles = StyleSheet.create({
   logo: {
-    fontSize: 42,
-    fontWeight: '900',
-    color: colors.primaryDark,
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
+  },
+  title: {
+    fontSize: 36,
+    fontFamily: fonts.extrabold,
+    color: '#1B633E',
     textAlign: 'center',
   },
   slogan: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 17,
+    fontFamily: fonts.bold,
     color: colors.text,
     textAlign: 'center',
     marginTop: spacing.sm,
   },
   sub: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.md,
-    lineHeight: 20,
+    lineHeight: 21,
+    paddingHorizontal: 4,
   },
   actions: { marginTop: spacing.xl, width: '100%' },
 });

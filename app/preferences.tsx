@@ -1,14 +1,27 @@
 import { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Modal, Pressable, ScrollView } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  Modal,
+  Pressable,
+  ScrollView,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+} from 'react-native';
+import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { IngredientSearch, AvoidList } from '@/components/IngredientSearch';
 import { ProfileSwitcher } from '@/components/ProfileSwitcher';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { getSession, getAvoidList, setAvoidList, clearSession, getProfiles } from '@/lib/storage';
+import { getSession, getAvoidList, setAvoidList, clearSession, getProfiles, isGuestSession } from '@/lib/storage';
 import { FEATURES } from '@/constants/features';
-import { loadIngredients, addCustomIngredient } from '@/lib/ingredients';
+import { loadIngredients, createCustomIngredient } from '@/lib/ingredients';
 import { t } from '@/i18n/translations';
 import type { FamilyProfile, Ingredient, UiLanguage } from '@/types';
+import { fonts } from '@/constants/fonts';
 import { colors, spacing } from '@/constants/theme';
 
 export default function PreferencesScreen() {
@@ -21,19 +34,30 @@ export default function PreferencesScreen() {
   const [catalog, setCatalog] = useState<Ingredient[]>([]);
   const [customModal, setCustomModal] = useState(false);
   const [customName, setCustomName] = useState('');
+  const [savingCustom, setSavingCustom] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
 
   const refresh = useCallback(async () => {
-    const session = await getSession();
-    if (!session) {
-      router.replace('/');
-      return;
+    try {
+      const session = await getSession();
+      if (!session) {
+        router.replace('/');
+        return;
+      }
+      setIsGuest(isGuestSession(session));
+      setLang(session.uiLanguage);
+      setAccountNickname(session.accountNickname);
+      setActiveProfileId(session.activeProfileId);
+      setProfiles(await getProfiles());
+      const [avoid, ingredients] = await Promise.all([getAvoidList(), loadIngredients()]);
+      setAvoidIds(avoid);
+      setCatalog(ingredients);
+    } catch (e) {
+      Alert.alert(
+        t(lang, 'error'),
+        e instanceof Error ? e.message : t(lang, 'errorLoad')
+      );
     }
-    setLang(session.uiLanguage);
-    setAccountNickname(session.accountNickname);
-    setActiveProfileId(session.activeProfileId);
-    setProfiles(await getProfiles());
-    setAvoidIds(await getAvoidList());
-    setCatalog(await loadIngredients());
   }, [router]);
 
   useFocusEffect(
@@ -46,39 +70,61 @@ export default function PreferencesScreen() {
     if (avoidIds.includes(ing.id)) return;
     const next = [...avoidIds, ing.id];
     setAvoidIds(next);
-    await setAvoidList(next);
+    try {
+      await setAvoidList(next);
+    } catch (e) {
+      setAvoidIds(avoidIds);
+      Alert.alert(t(lang, 'error'), e instanceof Error ? e.message : t(lang, 'errorSave'));
+    }
   };
 
   const removeAvoid = async (id: string) => {
     const next = avoidIds.filter((x) => x !== id);
     setAvoidIds(next);
-    await setAvoidList(next);
+    try {
+      await setAvoidList(next);
+    } catch (e) {
+      setAvoidIds(avoidIds);
+      Alert.alert(t(lang, 'error'), e instanceof Error ? e.message : t(lang, 'errorRemove'));
+    }
   };
 
   const saveCustom = async () => {
     const text = customName.trim();
-    if (!text) return;
-    const slug = text
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
-    const entry: Ingredient = {
-      id: `custom-${slug}-${Date.now()}`,
-      category: 'other',
-      labels: { en: text },
-    };
-    await addCustomIngredient(entry);
-    await addAvoid(entry);
-    setCatalog(await loadIngredients());
-    setCustomName('');
-    setCustomModal(false);
+    if (text.length < 2) {
+      Alert.alert(t(lang, 'error'), t(lang, 'errorMinChars'));
+      return;
+    }
+
+    setSavingCustom(true);
+    try {
+      const entry = await createCustomIngredient(text);
+      if (!avoidIds.includes(entry.id)) {
+        const next = [...avoidIds, entry.id];
+        setAvoidIds(next);
+        await setAvoidList(next);
+      }
+      setCatalog(await loadIngredients());
+      setCustomName('');
+      setCustomModal(false);
+    } catch (e) {
+      Alert.alert(
+        t(lang, 'error'),
+        e instanceof Error ? e.message : t(lang, 'errorSaveCustom')
+      );
+    } finally {
+      setSavingCustom(false);
+    }
   };
 
   const activeName = profiles.find((p) => p.id === activeProfileId)?.displayName ?? '';
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>{t(lang, 'preferencesTitle')}</Text>
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <Stack.Screen options={{ title: t(lang, 'navPreferences') }} />
+      {isGuest ? (
+        <Text style={styles.guestBanner}>{t(lang, 'guestBanner')}</Text>
+      ) : null}
 
       <ProfileSwitcher
         lang={lang}
@@ -88,6 +134,7 @@ export default function PreferencesScreen() {
         onSwitch={async () => {}}
         onAdd={async () => {}}
         onRemove={async () => {}}
+        onOpenAccount={() => router.push('/account')}
       />
 
       {FEATURES.familyProfiles && activeName ? (
@@ -96,6 +143,7 @@ export default function PreferencesScreen() {
         </Text>
       ) : null}
 
+      <Text style={styles.title}>{t(lang, 'preferencesTitle')}</Text>
       <IngredientSearch
         lang={lang}
         placeholder={t(lang, 'searchPlaceholder')}
@@ -104,36 +152,50 @@ export default function PreferencesScreen() {
       <Text style={styles.listTitle}>{t(lang, 'myAvoidList')}</Text>
       <AvoidList ids={avoidIds} lang={lang} catalog={catalog} onRemove={removeAvoid} />
       <PrimaryButton
-        label="Add custom ingredient"
+        label={t(lang, 'addIngredient')}
         variant="secondary"
         onPress={() => setCustomModal(true)}
         style={{ marginTop: spacing.sm }}
       />
       <Modal visible={customModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => !savingCustom && setCustomModal(false)}
+          />
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add ingredient</Text>
+            <Text style={styles.modalTitle}>{t(lang, 'newIngredient')}</Text>
+            <Text style={styles.modalHint}>{t(lang, 'newIngredientHint')}</Text>
             <TextInput
               style={styles.modalInput}
               value={customName}
               onChangeText={setCustomName}
-              placeholder="e.g. sorbitol, corn starch"
+              placeholder={t(lang, 'customIngredientPlaceholder')}
+              placeholderTextColor={colors.textMuted}
               autoFocus
+              editable={!savingCustom}
             />
-            <PrimaryButton label="Save" onPress={saveCustom} />
-            <Pressable onPress={() => setCustomModal(false)} style={{ marginTop: 12 }}>
-              <Text style={styles.cancel}>Cancel</Text>
-            </Pressable>
+            <PrimaryButton label={savingCustom ? '...' : t(lang, 'save')} onPress={saveCustom} />
+            {savingCustom ? (
+              <ActivityIndicator style={{ marginTop: 12 }} color={colors.primary} />
+            ) : (
+              <Pressable onPress={() => setCustomModal(false)} style={{ marginTop: 12 }}>
+                <Text style={styles.cancel}>{t(lang, 'cancel')}</Text>
+              </Pressable>
+            )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
       <PrimaryButton
-        label="Go to scan"
+        label={t(lang, 'goToScan')}
         onPress={() => router.push('/scan')}
         style={{ marginTop: spacing.md }}
       />
       <PrimaryButton
-        label={t(lang, 'signOut')}
+        label={isGuest ? t(lang, 'guestSignOut') : t(lang, 'signOut')}
         variant="danger"
         onPress={async () => {
           await clearSession();
@@ -147,9 +209,29 @@ export default function PreferencesScreen() {
 
 const styles = StyleSheet.create({
   container: { padding: spacing.lg },
-  title: { fontSize: 20, fontWeight: '700', marginBottom: spacing.md, color: colors.text },
-  profileSubtitle: { fontSize: 14, color: colors.primaryDark, fontWeight: '600', marginBottom: spacing.md },
-  listTitle: { fontWeight: '600', marginTop: spacing.lg, marginBottom: spacing.sm },
+  title: {
+    fontSize: 20,
+    fontFamily: fonts.bold,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+    color: colors.text,
+  },
+  guestBanner: {
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    color: colors.primaryDark,
+    backgroundColor: '#E8F5EE',
+    padding: spacing.sm,
+    borderRadius: 8,
+    marginBottom: spacing.md,
+  },
+  profileSubtitle: {
+    fontSize: 14,
+    color: colors.primaryDark,
+    fontFamily: fonts.semibold,
+    marginBottom: spacing.md,
+  },
+  listTitle: { fontFamily: fonts.semibold, marginTop: spacing.md, marginBottom: spacing.sm },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -160,8 +242,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: 16,
     padding: spacing.lg,
+    zIndex: 1,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: spacing.md },
+  modalTitle: { fontSize: 18, fontFamily: fonts.bold, marginBottom: spacing.sm },
+  modalHint: {
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+    marginBottom: spacing.md,
+    lineHeight: 18,
+  },
   modalInput: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -169,6 +259,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
     fontSize: 16,
+    fontFamily: fonts.regular,
   },
-  cancel: { textAlign: 'center', color: colors.textMuted },
+  cancel: { textAlign: 'center', color: colors.textMuted, fontFamily: fonts.semibold },
 });

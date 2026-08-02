@@ -4,10 +4,10 @@ import {
   TextInput,
   Text,
   Pressable,
-  FlatList,
   StyleSheet,
 } from 'react-native';
 import { searchIngredients, getDisplayLabel } from '@/lib/ingredients';
+import { t } from '@/i18n/translations';
 import type { Ingredient, UiLanguage } from '@/types';
 import { colors, spacing } from '@/constants/theme';
 
@@ -79,27 +79,25 @@ export function AvoidList({
   catalog: Ingredient[];
   onRemove: (id: string) => void;
 }) {
-  const items = ids
-    .map((id) => catalog.find((c) => c.id === id))
-    .filter(Boolean) as Ingredient[];
+  if (ids.length === 0) {
+    return <Text style={styles.empty}>{t(lang, 'avoidListEmpty')}</Text>;
+  }
 
   return (
-    <FlatList
-      data={items}
-      keyExtractor={(item) => item.id}
-      style={styles.list}
-      ListEmptyComponent={
-        <Text style={styles.empty}>Add ingredients you need to avoid.</Text>
-      }
-      renderItem={({ item }) => (
-        <View style={styles.chip}>
-          <Text style={styles.chipText}>{getDisplayLabel(item, lang)}</Text>
-          <Pressable onPress={() => onRemove(item.id)} hitSlop={8}>
-            <Text style={styles.remove}>✕</Text>
-          </Pressable>
-        </View>
-      )}
-    />
+    <View style={styles.list}>
+      {ids.map((id) => {
+        const item = catalog.find((c) => c.id === id);
+        const label = item ? getDisplayLabel(item, lang) : id.replace(/^custom-/, '').replace(/-/g, ' ');
+        return (
+          <View key={id} style={styles.chip}>
+            <Text style={styles.chipText}>{label}</Text>
+            <Pressable onPress={() => onRemove(id)} hitSlop={8}>
+              <Text style={styles.remove}>✕</Text>
+            </Pressable>
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -129,7 +127,7 @@ const styles = StyleSheet.create({
   },
   suggestionText: { fontSize: 16, color: colors.text, fontWeight: '600' },
   category: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  list: { marginTop: spacing.md, maxHeight: 360 },
+  list: { marginTop: spacing.md },
   empty: { color: colors.textMuted, fontStyle: 'italic', marginTop: spacing.md },
   chip: {
     flexDirection: 'row',

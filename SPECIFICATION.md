@@ -37,12 +37,53 @@
 
 ### 3.1 Onboarding
 
-1. **Welcome** — Supermarket-style background, cartoon boom/explosion frame with **SafeBite** logo, slogan, **Enter** / **Login**.
-2. **Login / Register** — Email + password (min 8 chars) + **name or nickname** for the account holder (e.g. parent). Optional: forgot password (Supabase, future).
-3. **Language** — UI language: English, Italian, French, German, Spanish, Portuguese, Russian, Arabic (RTL later). Saved to the account.
-4. **Preferences** — Search ingredients with autocomplete; add to avoid list (per active profile in data model). **UI for multiple family profiles is disabled in MVP** (`FEATURES.familyProfiles = false`); enable later without schema changes.
+#### 3.1.0 Pantalla de inicio (`/`)
 
-### 3.1.1 Accounts vs family profiles (multi-profile)
+| Elemento | Acción |
+|----------|--------|
+| **Login / Regístrate** | Navega a `/login` |
+| **Entra como amigo** | Navega a `/language?mode=guest` (sin cuenta) |
+
+Si ya hay sesión registrada (no invitado), la app redirige automáticamente a **Preferences**.
+
+#### 3.1.1 Login / Registro (`/login`)
+
+Selector superior: **Login** | **Regístrate**.
+
+| Modo | Campos | Destino tras éxito |
+|------|--------|-------------------|
+| **Login** | Email + contraseña (mín. 8) | `/preferences` |
+| **Regístrate** | Nickname + email + contraseña + idioma UI | `/preferences` |
+
+**Login (Supabase):**
+
+1. `signInWithPassword` (Supabase Auth).
+2. Comprobar fila en `public.profiles` — si no existe → error *“Usuario no registrado”*.
+3. Construir sesión con `ensureCloudAccountSession()`.
+
+**Registro (Supabase):**
+
+1. `signUp` con metadata `account_nickname` y `ui_language`.
+2. Trigger `handle_new_user` crea `profiles` + `family_profiles`.
+3. Actualizar `ui_language` en perfil si hace falta.
+4. Ir directo a ingredientes (no pantalla de idioma intermedia).
+
+**Fallback local** (sin Supabase): cuentas en AsyncStorage; mismo flujo de campos.
+
+#### 3.1.2 Modo amigo (`/language?mode=guest`)
+
+1. Usuario elige idioma UI.
+2. Sesión **solo en memoria** (`isGuest: true`) — avoid-list e ingredientes custom no se escriben en AsyncStorage.
+3. Navega a `/preferences` → puede buscar ingredientes, escanear, etc.
+4. **Al cerrar la app**, todos los datos de invitado se pierden.
+
+#### 3.1.3 Preferencias / ingredientes (`/preferences`)
+
+Flujo común tras login, registro o modo amigo: autocomplete de ingredientes, lista de evitar, botón **Ir a escanear**.
+
+---
+
+### 3.1.4 Accounts vs family profiles (multi-profile)
 
 One **account** (email + password) represents the household login — typically the parent who registers.
 
@@ -86,7 +127,9 @@ Under that account, the user creates one or more **family profiles**, each with:
 | Data | Storage |
 |------|---------|
 | Ingredient catalog (multilingual) | Code: `src/data/ingredients.seed.ts` |
-| Account email + password hash | Device (AsyncStorage), later Supabase Auth |
+| Registered account session | AsyncStorage + Supabase Auth |
+| Guest session + avoid-list + custom ingredients | **In-memory only** (cleared on app close) |
+| Account email + password hash (local fallback) | Device (AsyncStorage) |
 | Account nickname | Device / `profiles.account_nickname` |
 | Family profiles (id, display name) | Device / `family_profiles` table |
 | Avoid-list per profile | Device / `user_avoid_ingredients` keyed by profile |
@@ -163,12 +206,11 @@ scan_history (optional v2) (
 
 | Screen | Route | Purpose |
 |--------|-------|---------|
-| Welcome | `/` | Branding, Enter, Login |
-| Login | `/login` | Email, password, name/nickname; register toggle |
-| Language | `/language` | Pick UI language |
-| Preferences | `/preferences` | Family profile switcher, autocomplete + avoid list per profile |
+| Welcome | `/` | Branding; **Login / Regístrate**; **Entra como amigo** |
+| Login | `/login` | Toggle Login / Regístrate; auth Supabase o local |
+| Language | `/language?mode=guest` | Idioma solo para modo amigo |
+| Preferences | `/preferences` | Ingredientes a evitar (post-login o post-amigo) |
 | Scan | `/scan` | Barcode + result |
-| Tabs layout | `/(app)/` | Post-login shell (future) |
 
 ---
 

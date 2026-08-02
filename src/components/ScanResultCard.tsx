@@ -1,32 +1,49 @@
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import type { ScanResult, UiLanguage } from '@/types';
 import { t } from '@/i18n/translations';
+import { fonts } from '@/constants/fonts';
 import { colors, spacing } from '@/constants/theme';
+
+const safeFace = require('../../assets/images/result-safe.png');
+const unsafeFace = require('../../assets/images/result-unsafe.png');
+const confetti = require('../../assets/images/result-confetti.png');
 
 export function ScanResultCard({ result, lang }: { result: ScanResult; lang: UiLanguage }) {
   const ok = result.safe;
+  const count = result.matched.length;
 
   return (
-    <View style={[styles.card, ok ? styles.safeCard : styles.dangerCard]}>
-      <Ionicons
-        name={ok ? 'checkmark-circle' : 'close-circle'}
-        size={56}
-        color={ok ? colors.safe : colors.danger}
-      />
+    <View style={styles.card}>
+      <View style={styles.hero}>
+        <Image source={confetti} style={styles.confetti} resizeMode="contain" />
+        <Image
+          source={ok ? safeFace : unsafeFace}
+          style={styles.face}
+          accessibilityLabel={ok ? t(lang, 'resultSafe') : t(lang, 'resultNotSafe')}
+        />
+      </View>
+
       <Text style={styles.productName}>{result.productName}</Text>
+      <Text style={styles.productIs}>{t(lang, 'resultProductIs')}</Text>
       <Text style={[styles.verdict, ok ? styles.safeText : styles.dangerText]}>
-        {ok ? t(lang, 'safe') : t(lang, 'notSafe')}
+        {ok ? t(lang, 'resultSafe') : t(lang, 'resultNotSafe')}
       </Text>
+      <Text style={styles.detail}>
+        {ok
+          ? t(lang, 'resultSafeDetail')
+          : t(lang, 'resultNotSafeDetail', { count: String(count) })}
+      </Text>
+
       {!ok && result.matched.length > 0 && (
         <View style={styles.matchedBox}>
           {result.matched.map((m) => (
             <Text key={m.id} style={styles.matchedItem}>
-              • {m.label} ({m.matchedTerm})
+              {m.label}
             </Text>
           ))}
         </View>
       )}
+
       <Text style={styles.disclaimer}>{t(lang, 'disclaimer')}</Text>
     </View>
   );
@@ -35,28 +52,89 @@ export function ScanResultCard({ result, lang }: { result: ScanResult; lang: UiL
 const styles = StyleSheet.create({
   card: {
     marginTop: spacing.md,
-    padding: spacing.lg,
-    borderRadius: 16,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    borderRadius: 24,
     alignItems: 'center',
+    backgroundColor: colors.white,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
-  safeCard: { backgroundColor: colors.safeBg },
-  dangerCard: { backgroundColor: colors.dangerBg },
+  hero: {
+    width: '100%',
+    height: 168,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  confetti: {
+    position: 'absolute',
+    width: '108%',
+    height: 120,
+    top: 8,
+  },
+  face: {
+    width: 118,
+    height: 118,
+    zIndex: 1,
+  },
   productName: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontFamily: fonts.bold,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  productIs: {
+    fontSize: 16,
+    fontFamily: fonts.regular,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  verdict: {
+    fontSize: 34,
+    fontFamily: fonts.extrabold,
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  safeText: { color: '#1FA855' },
+  dangerText: { color: '#E53935' },
+  detail: {
+    fontSize: 14,
+    fontFamily: fonts.regular,
     color: colors.text,
     textAlign: 'center',
     marginTop: spacing.sm,
+    lineHeight: 20,
+    paddingHorizontal: spacing.sm,
   },
-  verdict: { fontSize: 18, fontWeight: '700', marginTop: spacing.sm },
-  safeText: { color: colors.safe },
-  dangerText: { color: colors.danger },
-  matchedBox: { alignSelf: 'stretch', marginTop: spacing.md },
-  matchedItem: { fontSize: 15, color: colors.text, marginBottom: 4 },
+  matchedBox: {
+    marginTop: spacing.md,
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: colors.dangerBg,
+    borderRadius: 14,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
+  matchedItem: {
+    fontSize: 16,
+    fontFamily: fonts.semibold,
+    color: colors.danger,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
   disclaimer: {
     fontSize: 11,
+    fontFamily: fonts.regular,
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.md,
+    lineHeight: 15,
   },
 });

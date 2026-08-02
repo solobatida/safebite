@@ -6,7 +6,8 @@ export type UiLanguage =
   | 'es'
   | 'pt'
   | 'ru'
-  | 'ar';
+  | 'ar'
+  | 'ca';
 
 export type IngredientCategory =
   | 'sugars'
@@ -48,6 +49,8 @@ export interface UserSession {
   activeProfileId: string;
   activeProfileName: string;
   uiLanguage: UiLanguage;
+  /** Guest mode: session lives in memory only; cleared when the app closes */
+  isGuest?: boolean;
 }
 
 export interface ScanResult {

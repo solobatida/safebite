@@ -3,11 +3,59 @@ import type { FamilyProfile, Ingredient, UiLanguage, UserSession } from '@/types
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 
 const KEYS = {
-  session: '@safebyte/session',
-  accounts: '@safebyte/accounts',
-  avoid: '@safebyte/avoid',
-  customIngredients: '@safebyte/custom_ingredients',
+  session: '@safebite/session',
+  accounts: '@safebite/accounts',
+  avoid: '@safebite/avoid',
+  customIngredients: '@safebite/custom_ingredients',
 };
+
+let storageMigrated = false;
+
+/** In-memory guest session — not persisted to AsyncStorage */
+let guestSession: UserSession | null = null;
+let guestAvoidList: string[] = [];
+let guestCustomIngredients: Ingredient[] = [];
+
+export function isGuestSession(session: UserSession | null): boolean {
+  return Boolean(session?.isGuest);
+}
+
+export async function createGuestSession(uiLanguage: UiLanguage): Promise<UserSession> {
+  const session: UserSession = {
+    email: 'guest@safebite.local',
+    userId: 'guest',
+    accountNickname: 'Guest',
+    activeProfileId: 'guest-profile',
+    activeProfileName: 'Guest',
+    uiLanguage,
+    isGuest: true,
+  };
+  guestSession = session;
+  guestAvoidList = [];
+  return session;
+}
+
+export function clearGuestSession(): void {
+  guestSession = null;
+  guestAvoidList = [];
+  guestCustomIngredients = [];
+}
+
+async function migrateLegacyStorageKeys(): Promise<void> {
+  if (storageMigrated) return;
+  storageMigrated = true;
+
+  const allKeys = await AsyncStorage.getAllKeys();
+  for (const key of allKeys) {
+    if (!key.startsWith('@safebyte/')) continue;
+    const newKey = key.replace('@safebyte/', '@safebite/');
+    const value = await AsyncStorage.getItem(key);
+    if (value !== null && (await AsyncStorage.getItem(newKey)) === null) {
+      await AsyncStorage.setItem(newKey, value);
+    }
+    await AsyncStorage.removeItem(key);
+  }
+}
 
 interface LocalAccount {
   passwordHash: string;
@@ -17,6 +65,10 @@ interface LocalAccount {
 }
 
 export async function getSession(): Promise<UserSession | null> {
+  if (guestSession) return guestSession;
+
+  await migrateLegacyStorageKeys();
+
   const raw = await AsyncStorage.getItem(KEYS.session);
   if (raw) {
     const session = JSON.parse(raw) as UserSession;
@@ -55,10 +107,17 @@ async function migrateSessionShape(session: UserSession): Promise<UserSession> {
 }
 
 export async function setSession(session: UserSession): Promise<void> {
+  if (session.isGuest) {
+    guestSession = session;
+    return;
+  }
+  // Real login replaces guest mode completely
+  clearGuestSession();
   await AsyncStorage.setItem(KEYS.session, JSON.stringify(session));
 }
 
 export async function clearSession(): Promise<void> {
+  clearGuestSession();
   await AsyncStorage.removeItem(KEYS.session);
   if (supabaseEnabled && supabase) {
     await supabase.auth.signOut();
@@ -80,9 +139,9 @@ type DbFamilyProfileRow = {
 export async function ensureCloudAccountSession(): Promise<UserSession | null> {
   if (!supabaseEnabled || !supabase) return null;
 
-  const { data: userData, error: userErr } = await supabase.auth.getUser();
-  if (userErr) throw userErr;
-  const user = userData.user;
+  // Prefer getSession — getUser() throws AuthSessionMissingError when logged out
+  const { data: sessionData } = await supabase.auth.getSession();
+  const user = sessionData.session?.user;
   if (!user?.id || !user.email) return null;
 
   // Load profile (created by trigger) or fallback to auth metadata.
@@ -98,6 +157,8 @@ export async function ensureCloudAccountSession(): Promise<UserSession | null> {
     (typeof user.user_metadata?.account_nickname === 'string'
       ? user.user_metadata.account_nickname
       : '') ||
+    (typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : '') ||
+    (typeof user.user_metadata?.name === 'string' ? user.user_metadata.name : '') ||
     user.email.split('@')[0];
 
   const uiLanguage: UiLanguage =
@@ -128,6 +189,12 @@ export async function ensureCloudAccountSession(): Promise<UserSession | null> {
     uiLanguage,
   };
   await setSession(session);
+  try {
+    const { clearIngredientsCache } = await import('@/lib/ingredients');
+    clearIngredientsCache();
+  } catch {
+    // ignore
+  }
   return session;
 }
 
@@ -282,6 +349,40 @@ async function migrateLegacyAvoidList(email: string, profileId: string): Promise
 export async function getProfiles(): Promise<FamilyProfile[]> {
   const session = await getSession();
   if (!session) return [];
+  if (session.isGuest) {
+    return [
+      {
+        id: session.activeProfileId,
+        displayName: session.activeProfileName,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  }
+
+  // Cloud account: profiles live in Supabase; session already has the active one
+  if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
+    const { data, error } = await supabase
+      .from('family_profiles')
+      .select('id,display_name,created_at')
+      .eq('account_id', session.userId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    if (data?.length) {
+      return data.map((row: { id: string; display_name: string; created_at: string }) => ({
+        id: row.id,
+        displayName: row.display_name,
+        createdAt: row.created_at,
+      }));
+    }
+    return [
+      {
+        id: session.activeProfileId,
+        displayName: session.activeProfileName || session.accountNickname,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  }
+
   const account = await getLocalAccount(session.email);
   return account?.profiles ?? [];
 }
@@ -387,12 +488,43 @@ export async function updateUiLanguage(lang: UiLanguage): Promise<void> {
   if (!session) return;
   await setSession({ ...session, uiLanguage: lang });
 
-  if (supabaseEnabled && supabase) {
-    // Keep profile in sync for cloud accounts
-    const { data } = await supabase.auth.getUser();
-    if (data.user?.id) {
-      await supabase.from('profiles').update({ ui_language: lang }).eq('id', data.user.id);
-    }
+  if (session.isGuest) return;
+
+  if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ ui_language: lang })
+      .eq('id', session.userId);
+    if (error) throw error;
+  }
+}
+
+export async function updateAccountNickname(nickname: string): Promise<void> {
+  const session = await getSession();
+  if (!session) throw new Error('Not signed in');
+  const name = nickname.trim();
+  if (name.length < 2) throw new Error('Nickname must be at least 2 characters.');
+
+  await setSession({ ...session, accountNickname: name });
+
+  if (session.isGuest) return;
+
+  if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ account_nickname: name })
+      .eq('id', session.userId);
+    if (error) throw error;
+    return;
+  }
+
+  // Local accounts
+  const accounts = await getLocalAccounts();
+  const account = accounts[session.email];
+  if (account) {
+    account.accountNickname = name;
+    accounts[session.email] = account;
+    await AsyncStorage.setItem(KEYS.accounts, JSON.stringify(accounts));
   }
 }
 
@@ -404,13 +536,30 @@ export async function getAvoidList(): Promise<string[]> {
   const session = await getSession();
   if (!session) return [];
 
+  if (session.isGuest) return [...guestAvoidList];
+
   if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
+    // All family profiles under this account (avoids empty list if active profile id drifted)
+    const { data: profiles, error: profErr } = await supabase
+      .from('family_profiles')
+      .select('id')
+      .eq('account_id', session.userId);
+    if (profErr) throw profErr;
+
+    const profileIds = (profiles ?? []).map((p: { id: string }) => p.id);
+    if (profileIds.length === 0) {
+      // Fallback to session profile id
+      profileIds.push(session.activeProfileId);
+    }
+
     const { data, error } = await supabase
       .from('user_avoid_ingredients')
       .select('ingredient_id')
-      .eq('family_profile_id', session.activeProfileId);
+      .in('family_profile_id', profileIds);
     if (error) throw error;
-    return (data ?? []).map((r: any) => r.ingredient_id as string);
+
+    const unique = [...new Set((data ?? []).map((r: { ingredient_id: string }) => r.ingredient_id))];
+    return unique;
   }
 
   await migrateLegacyAvoidList(session.email, session.activeProfileId);
@@ -421,6 +570,11 @@ export async function getAvoidList(): Promise<string[]> {
 export async function setAvoidList(ids: string[]): Promise<void> {
   const session = await getSession();
   if (!session) throw new Error('Not signed in');
+
+  if (session.isGuest) {
+    guestAvoidList = [...ids];
+    return;
+  }
 
   if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
     // Replace set for this profile.
@@ -447,11 +601,19 @@ export async function setAvoidList(ids: string[]): Promise<void> {
 }
 
 export async function getCustomIngredients(): Promise<Ingredient[]> {
+  const session = await getSession();
+  if (session?.isGuest) return [...guestCustomIngredients];
   const raw = await AsyncStorage.getItem(KEYS.customIngredients);
   return raw ? JSON.parse(raw) : [];
 }
 
 export async function addCustomIngredient(entry: Ingredient): Promise<void> {
+  const session = await getSession();
+  if (session?.isGuest) {
+    if (guestCustomIngredients.some((i) => i.id === entry.id)) return;
+    guestCustomIngredients.push(entry);
+    return;
+  }
   const list = await getCustomIngredients();
   if (list.some((i) => i.id === entry.id)) return;
   list.push(entry);

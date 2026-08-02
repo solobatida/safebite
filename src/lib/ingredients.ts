@@ -5,10 +5,47 @@ import { getCustomIngredients } from '@/lib/storage';
 let cache: Ingredient[] | null = null;
 let searchIndex: { term: string; ingredientId: string }[] | null = null;
 
+export function clearIngredientsCache(): void {
+  cache = null;
+  searchIndex = null;
+}
+
 export async function loadIngredients(): Promise<Ingredient[]> {
   if (cache) return cache;
   const custom = await getCustomIngredients();
-  cache = [...SEED_INGREDIENTS, ...custom];
+  let remoteCustom: Ingredient[] = [];
+
+  try {
+    const { supabase, supabaseEnabled } = await import('@/lib/supabase');
+    const { getSession } = await import('@/lib/storage');
+    const session = await getSession();
+    if (
+      supabaseEnabled &&
+      supabase &&
+      session &&
+      !session.isGuest &&
+      !session.userId.startsWith('local-')
+    ) {
+      const { data } = await supabase
+        .from('ingredients')
+        .select('id,category,labels,aliases')
+        .like('id', 'custom-%');
+      remoteCustom = (data ?? []).map((row: any) => ({
+        id: row.id as string,
+        category: (row.category as Ingredient['category']) || 'other',
+        labels: (row.labels ?? {}) as Ingredient['labels'],
+        aliases: (row.aliases as string[] | undefined) ?? [],
+      }));
+    }
+  } catch {
+    // Offline / RLS — keep seed + local custom
+  }
+
+  const byId = new Map<string, Ingredient>();
+  for (const ing of [...SEED_INGREDIENTS, ...custom, ...remoteCustom]) {
+    byId.set(ing.id, ing);
+  }
+  cache = [...byId.values()];
   buildSearchIndex(cache);
   return cache;
 }
@@ -136,4 +173,72 @@ export async function addCustomIngredient(entry: Ingredient): Promise<void> {
   await save(entry);
   cache = null;
   searchIndex = null;
+}
+
+const ALL_UI_LANGS: UiLanguage[] = ['en', 'it', 'fr', 'de', 'es', 'pt', 'ru', 'ar', 'ca'];
+
+/** Build labels for every UI language (same display text until translated). */
+export function labelsForAllLanguages(name: string): Ingredient['labels'] {
+  const labels: Ingredient['labels'] = {};
+  for (const code of ALL_UI_LANGS) {
+    labels[code] = name;
+  }
+  return labels;
+}
+
+export function slugifyIngredientName(name: string): string {
+  const ascii = normalize(name)
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return ascii.length >= 2 ? ascii : `x${Date.now().toString(36)}`;
+}
+
+/**
+ * Create a custom ingredient in local catalog + Supabase ingredients (if logged in),
+ * with the name copied to all UI languages.
+ */
+export async function createCustomIngredient(name: string): Promise<Ingredient> {
+  const text = name.trim();
+  if (text.length < 2) {
+    throw new Error('Escribe al menos 2 caracteres.');
+  }
+
+  const slug = slugifyIngredientName(text);
+  const entry: Ingredient = {
+    id: `custom-${slug}`,
+    category: 'other',
+    labels: labelsForAllLanguages(text),
+    aliases: [text],
+  };
+
+  const { addCustomIngredient: saveLocal, getSession } = await import('@/lib/storage');
+  const { supabase, supabaseEnabled } = await import('@/lib/supabase');
+
+  const session = await getSession();
+  if (
+    supabaseEnabled &&
+    supabase &&
+    session &&
+    !session.isGuest &&
+    !session.userId.startsWith('local-')
+  ) {
+    const { error } = await supabase.from('ingredients').upsert(
+      {
+        id: entry.id,
+        category: entry.category,
+        labels: entry.labels,
+        aliases: entry.aliases ?? [],
+        status: 'approved',
+      },
+      { onConflict: 'id' }
+    );
+    if (error) throw error;
+  }
+
+  await saveLocal(entry);
+  cache = null;
+  searchIndex = null;
+  return entry;
 }
