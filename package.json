@@ -37,6 +37,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "web:export": "expo export --platform web",
+    "web:deploy": "expo export --platform web && eas deploy",
     "db:seed-sql": "npx tsx scripts/build-ingredient-seed-sql.ts"
   },
   "private": true

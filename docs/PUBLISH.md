@@ -67,7 +67,22 @@ Textos y guía de capturas: [`STORE_LISTING.md`](./STORE_LISTING.md)
 
 ---
 
-## 4. Build production
+## 4b. Probar en web (URL pública) — opcional
+
+Antes de las stores, puedes publicar la versión **web** con EAS Hosting:
+
+```bash
+npx expo export --platform web
+npx eas-cli deploy --prod --dev-domain solobatida-safebite
+```
+
+**URL de producción actual:** https://solobatida-safebite.expo.app
+
+**Límites en web:** la cámara de códigos no funciona bien; usa el código demo.  
+Para Google Login, en Supabase → Authentication → URL Configuration añade:
+- `https://solobatida-safebite.expo.app`
+- `https://solobatida-safebite.expo.app/auth/callback`
+
 
 ```bash
 # Android (.aab para Play Store)
