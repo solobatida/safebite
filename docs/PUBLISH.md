@@ -69,16 +69,30 @@ Textos y guía de capturas: [`STORE_LISTING.md`](./STORE_LISTING.md)
 
 ## 4b. Probar en web (URL pública) — opcional
 
-Antes de las stores, puedes publicar la versión **web** con EAS Hosting:
+**URL de producción:** https://solobatida-safebite.expo.app
+
+### Deploy automático desde `main`
+
+Hay un workflow EAS en [`.eas/workflows/deploy-web.yml`](../.eas/workflows/deploy-web.yml):
+
+1. Conecta el repo en Expo: [GitHub settings del proyecto](https://expo.dev/accounts/solobatida/projects/safebite/github) → instalar la app de GitHub y vincular el repositorio.
+2. Cada **push / merge a `main`** exporta la web y la publica en producción.
+3. Los PRs pueden generar preview con [`.eas/workflows/pr-preview.yml`](../.eas/workflows/pr-preview.yml).
+
+Probar el workflow a mano:
+
+```bash
+npx eas-cli workflow:run .eas/workflows/deploy-web.yml
+```
+
+### Deploy manual
 
 ```bash
 npx expo export --platform web
 npx eas-cli deploy --prod --dev-domain solobatida-safebite
 ```
 
-**URL de producción actual:** https://solobatida-safebite.expo.app
-
-**Límites en web:** la cámara de códigos no funciona bien; usa el código demo.  
+**Límites en web:** la cámara usa el escáner del navegador (EAN/UPC). Si falla, escribe el número o usa el demo.  
 Para Google Login, en Supabase → Authentication → URL Configuration añade:
 - `https://solobatida-safebite.expo.app`
 - `https://solobatida-safebite.expo.app/auth/callback`
