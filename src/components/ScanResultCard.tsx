@@ -66,20 +66,20 @@ const styles = StyleSheet.create({
   },
   hero: {
     width: '100%',
-    height: 168,
+    height: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   confetti: {
     position: 'absolute',
-    width: '108%',
-    height: 120,
-    top: 8,
+    width: '100%',
+    height: 88,
+    top: 4,
   },
   face: {
-    width: 118,
-    height: 118,
+    width: 84,
+    height: 84,
     zIndex: 1,
   },
   productName: {
@@ -90,13 +90,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   productIs: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: fonts.regular,
     color: colors.text,
     textAlign: 'center',
   },
   verdict: {
-    fontSize: 34,
+    fontSize: 28,
     fontFamily: fonts.extrabold,
     textAlign: 'center',
     letterSpacing: 0.5,

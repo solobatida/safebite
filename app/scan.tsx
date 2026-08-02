@@ -7,6 +7,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
@@ -15,7 +16,6 @@ import { WebBarcodeScanner } from '@/components/WebBarcodeScanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { getSession, getAvoidList } from '@/lib/storage';
 import { checkBarcode } from '@/lib/productCheck';
-import { DEMO_BARCODES } from '@/lib/openFoodFacts';
 import { t } from '@/i18n/translations';
 import type { ScanResult, UiLanguage } from '@/types';
 import { colors, spacing } from '@/constants/theme';
@@ -94,7 +94,11 @@ export default function ScanScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.flex}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
       <Stack.Screen options={{ title: t(lang, 'navScan') }} />
       {FEATURES.familyProfiles && profileName ? (
         <Text style={styles.profileBanner}>{t(lang, 'scanForProfile', { name: profileName })}</Text>
@@ -134,16 +138,6 @@ export default function ScanScreen() {
         </View>
       ) : null}
 
-      <View style={styles.demoRow}>
-        <Text style={styles.demoLabel}>{t(lang, 'demoBarcode')}:</Text>
-        <PrimaryButton
-          label="Nutella"
-          variant="secondary"
-          onPress={() => runCheck(DEMO_BARCODES.nutella)}
-          style={styles.demoBtn}
-        />
-      </View>
-
       {loading && <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 12 }} />}
 
       {result && <ScanResultCard result={result} lang={lang} />}
@@ -159,17 +153,19 @@ export default function ScanScreen() {
           }}
           style={{
             marginTop: spacing.md,
+            marginBottom: spacing.xl,
             borderRadius: 14,
             ...(result?.safe ? { backgroundColor: '#1FA855' } : null),
           }}
         />
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: spacing.md },
+  flex: { flex: 1 },
+  container: { padding: spacing.md, paddingBottom: spacing.xl },
   profileBanner: {
     fontSize: 14,
     fontWeight: '600',
@@ -189,7 +185,4 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     fontSize: 16,
   },
-  demoRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, flexWrap: 'wrap' },
-  demoLabel: { marginRight: spacing.sm, color: colors.textMuted },
-  demoBtn: { paddingVertical: 8, paddingHorizontal: 12 },
 });
