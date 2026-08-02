@@ -1,0 +1,13 @@
+name: Web PR preview
+
+on:
+  pull_request: {}
+
+jobs:
+  deploy:
+    type: deploy
+    name: Deploy PR preview
+
+  comment:
+    needs: [deploy]
+    type: github-comment
