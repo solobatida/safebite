@@ -11,6 +11,7 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { ScanResultCard } from '@/components/ScanResultCard';
+import { WebBarcodeScanner } from '@/components/WebBarcodeScanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { getSession, getAvoidList } from '@/lib/storage';
 import { checkBarcode } from '@/lib/productCheck';
@@ -47,42 +48,42 @@ export default function ScanScreen() {
     }, [router])
   );
 
-  const runCheck = async (code: string) => {
-    if (code === lastCode || loading) return;
-    setLastCode(code);
-    setLoading(true);
-    setScanning(false);
-    try {
-      const res = await checkBarcode(code, avoidIds, lang);
-      if (!res) {
-        Alert.alert('SafeBite', t(lang, 'productNotFound'));
-        setScanning(true);
-        setLastCode('');
-        return;
-      }
-      setResult(res);
-      if (res.unknown && res.unknown.length > 0) {
-        const term = res.unknown[0];
-        Alert.alert(
-          t(lang, 'unknownTerm'),
-          t(lang, 'unknownPrompt', { term }),
-          [
+  const runCheck = useCallback(
+    async (code: string) => {
+      if (code === lastCode || loading) return;
+      setLastCode(code);
+      setLoading(true);
+      setScanning(false);
+      try {
+        const res = await checkBarcode(code, avoidIds, lang);
+        if (!res) {
+          Alert.alert('SafeBite', t(lang, 'productNotFound'));
+          setScanning(true);
+          setLastCode('');
+          return;
+        }
+        setResult(res);
+        if (res.unknown && res.unknown.length > 0) {
+          const term = res.unknown[0];
+          Alert.alert(t(lang, 'unknownTerm'), t(lang, 'unknownPrompt', { term }), [
             { text: t(lang, 'skip'), style: 'cancel' },
             {
               text: t(lang, 'addUnknown'),
               onPress: () => router.push('/preferences'),
             },
-          ]
-        );
+          ]);
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [avoidIds, lang, lastCode, loading, router]
+  );
 
-  const canUseCamera = Platform.OS !== 'web' && permission?.granted;
+  const isWeb = Platform.OS === 'web';
+  const canUseNativeCamera = !isWeb && permission?.granted;
 
-  if (Platform.OS !== 'web' && !permission?.granted) {
+  if (!isWeb && !permission?.granted) {
     return (
       <View style={styles.center}>
         <Stack.Screen options={{ title: t(lang, 'navScan') }} />
@@ -98,7 +99,8 @@ export default function ScanScreen() {
       {FEATURES.familyProfiles && profileName ? (
         <Text style={styles.profileBanner}>{t(lang, 'scanForProfile', { name: profileName })}</Text>
       ) : null}
-      {canUseCamera && scanning && (
+
+      {canUseNativeCamera && scanning && (
         <CameraView
           style={styles.camera}
           barcodeScannerSettings={{
@@ -108,9 +110,16 @@ export default function ScanScreen() {
         />
       )}
 
-      {Platform.OS === 'web' && (
+      {isWeb && scanning ? (
+        <WebBarcodeScanner
+          active={scanning && !loading}
+          onScan={runCheck}
+          hint={t(lang, 'webScanHint')}
+        />
+      ) : null}
+
+      {isWeb ? (
         <View style={styles.webBox}>
-          <Text style={styles.hint}>{t(lang, 'webScanHint')}</Text>
           <TextInput
             style={styles.input}
             placeholder={t(lang, 'barcodePlaceholder')}
@@ -123,7 +132,7 @@ export default function ScanScreen() {
             onPress={() => manualCode && runCheck(manualCode)}
           />
         </View>
-      )}
+      ) : null}
 
       <View style={styles.demoRow}>
         <Text style={styles.demoLabel}>{t(lang, 'demoBarcode')}:</Text>
