@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, TextInput, Modal, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { FamilyProfile, UiLanguage } from '@/types';
 import { FEATURES } from '@/constants/features';
 import { t } from '@/i18n/translations';
+import { fonts } from '@/constants/fonts';
 import { colors, spacing } from '@/constants/theme';
 import { PrimaryButton } from '@/components/PrimaryButton';
 
@@ -14,6 +16,7 @@ export function ProfileSwitcher({
   onSwitch,
   onAdd,
   onRemove,
+  onOpenAccount,
 }: {
   lang: UiLanguage;
   profiles: FamilyProfile[];
@@ -22,16 +25,28 @@ export function ProfileSwitcher({
   onSwitch: (profileId: string) => void;
   onAdd: (displayName: string) => Promise<void>;
   onRemove: (profileId: string) => Promise<void>;
+  onOpenAccount?: () => void;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [newName, setNewName] = useState('');
 
+  const accountRow = (
+    <Pressable
+      style={styles.accountRow}
+      onPress={onOpenAccount}
+      disabled={!onOpenAccount}
+    >
+      <Text style={styles.accountText} numberOfLines={1}>
+        {t(lang, 'accountLabel', { name: accountNickname || '—' })}
+      </Text>
+      {onOpenAccount ? (
+        <Ionicons name="settings-outline" size={24} color={colors.primaryDark} />
+      ) : null}
+    </Pressable>
+  );
+
   if (!FEATURES.familyProfiles) {
-    return (
-      <View style={styles.wrap}>
-        <Text style={styles.accountOnly}>{t(lang, 'accountLabel', { name: accountNickname })}</Text>
-      </View>
-    );
+    return <View style={styles.wrap}>{accountRow}</View>;
   }
 
   const saveProfile = async () => {
@@ -65,9 +80,7 @@ export function ProfileSwitcher({
   return (
     <View style={styles.wrap}>
       <Text style={styles.sectionTitle}>{t(lang, 'profilesSection')}</Text>
-      <Text style={styles.account}>
-        {t(lang, 'accountLabel', { name: accountNickname })}
-      </Text>
+      {accountRow}
       <View style={styles.chips}>
         {profiles.map((p) => {
           const active = p.id === activeProfileId;
@@ -123,9 +136,26 @@ export function ProfileSwitcher({
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: spacing.md },
-  accountOnly: { fontSize: 15, fontWeight: '600', color: colors.text },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  account: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    backgroundColor: colors.white,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  accountText: {
+    flex: 1,
+    fontSize: 18,
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+  sectionTitle: { fontSize: 16, fontFamily: fonts.bold, color: colors.text, marginBottom: spacing.sm },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.sm },
   chip: {
     paddingVertical: 8,

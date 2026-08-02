@@ -6,7 +6,8 @@ export type UiLanguage =
   | 'es'
   | 'pt'
   | 'ru'
-  | 'ar';
+  | 'ar'
+  | 'ca';
 
 export type IngredientCategory =
   | 'sugars'

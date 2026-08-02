@@ -8,9 +8,9 @@ import {
   Platform,
   ScrollView,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { PrimaryButton } from '@/components/PrimaryButton';
 import {
   ensureCloudAccountSession,
   registerLocalUser,
@@ -18,7 +18,9 @@ import {
   hasLocalAccount,
   clearGuestSession,
 } from '@/lib/storage';
+import { sendPasswordResetEmail, signInWithGoogle } from '@/lib/auth';
 import { LANGUAGES } from '@/constants/languages';
+import { fonts } from '@/constants/fonts';
 import { colors, spacing } from '@/constants/theme';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { getAuthErrorMessage, isEmailNotConfirmedError } from '@/lib/authErrors';
@@ -32,12 +34,12 @@ export default function LoginScreen() {
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>('es');
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
   const [resendOk, setResendOk] = useState(false);
 
-  // Leaving guest mode when opening login/register
   useEffect(() => {
     clearGuestSession();
   }, []);
@@ -53,26 +55,59 @@ export default function LoginScreen() {
     clearFeedback();
   };
 
+  const goIn = () => router.replace('/preferences');
+
   const resendConfirmation = async () => {
     if (!supabase || !email.trim()) {
       setFormError('Introduce tu email arriba para reenviar la confirmación.');
       return;
     }
-
     setResendBusy(true);
     setResendOk(false);
     try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email.trim(),
-      });
+      const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim() });
       if (error) throw error;
-      setFormError('Email de confirmación reenviado. Revisa tu bandeja de entrada y spam.');
+      setFormError('Email de confirmación reenviado. Revisa tu bandeja y spam.');
       setResendOk(true);
     } catch (e) {
       setFormError(getAuthErrorMessage(e));
     } finally {
       setResendBusy(false);
+    }
+  };
+
+  const onForgotPassword = async () => {
+    clearFeedback();
+    if (!email.trim()) {
+      setFormError('Escribe tu email arriba y pulsa otra vez “¿Olvidaste la contraseña?”.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(email);
+      setFormError('Te hemos enviado un email para restablecer la contraseña. Revisa bandeja y spam.');
+      setResendOk(true);
+    } catch (e) {
+      setFormError(getAuthErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onGoogle = async () => {
+    clearFeedback();
+    if (!supabaseEnabled) {
+      setFormError('Configura Supabase para usar Google Login.');
+      return;
+    }
+    setGoogleLoading(true);
+    try {
+      const session = await signInWithGoogle();
+      // On web, browser redirects to /auth/callback — no session returned here
+      if (session) goIn();
+    } catch (e) {
+      setFormError(getAuthErrorMessage(e));
+      setGoogleLoading(false);
     }
   };
 
@@ -83,19 +118,16 @@ export default function LoginScreen() {
       setFormError('Email y contraseña son obligatorios');
       return;
     }
-
     if (isRegister && nickname.trim().length < 2) {
       setFormError('Introduce un nickname (mín. 2 caracteres)');
       return;
     }
-
     if (password.length < 8) {
       setFormError('La contraseña debe tener al menos 8 caracteres');
       return;
     }
 
     setLoading(true);
-
     try {
       if (supabaseEnabled && supabase) {
         if (isRegister) {
@@ -113,7 +145,7 @@ export default function LoginScreen() {
 
           if (!data.session) {
             setFormError(
-              'Cuenta creada. Te hemos enviado un enlace de confirmación — ábrelo y luego inicia sesión con Login.'
+              'Cuenta creada. Confirma el email y luego inicia sesión con Entrar.'
             );
             setNeedsEmailConfirm(true);
             setIsRegister(false);
@@ -129,7 +161,7 @@ export default function LoginScreen() {
 
           clearGuestSession();
           await ensureCloudAccountSession();
-          router.replace('/preferences');
+          goIn();
           return;
         }
 
@@ -155,7 +187,7 @@ export default function LoginScreen() {
 
         clearGuestSession();
         await ensureCloudAccountSession();
-        router.replace('/preferences');
+        goIn();
         return;
       }
 
@@ -170,12 +202,10 @@ export default function LoginScreen() {
         }
         await loginLocalUser(email, password);
       }
-      router.replace('/preferences');
+      goIn();
     } catch (e) {
       setFormError(getAuthErrorMessage(e));
-      if (isEmailNotConfirmedError(e)) {
-        setNeedsEmailConfirm(true);
-      }
+      if (isEmailNotConfirmedError(e)) setNeedsEmailConfirm(true);
     } finally {
       setLoading(false);
     }
@@ -186,41 +216,66 @@ export default function LoginScreen() {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.toggleRow}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.segment}>
           <Pressable
-            style={[styles.toggleBtn, !isRegister && styles.toggleBtnActive]}
+            style={[styles.segmentBtn, !isRegister && styles.segmentBtnActive]}
             onPress={() => switchMode(false)}
           >
-            <Text style={[styles.toggleText, !isRegister && styles.toggleTextActive]}>Login</Text>
+            <Text style={[styles.segmentText, !isRegister && styles.segmentTextActive]}>
+              Entrar
+            </Text>
           </Pressable>
           <Pressable
-            style={[styles.toggleBtn, isRegister && styles.toggleBtnActive]}
+            style={[styles.segmentBtn, isRegister && styles.segmentBtnActive]}
             onPress={() => switchMode(true)}
           >
-            <Text style={[styles.toggleText, isRegister && styles.toggleTextActive]}>Regístrate</Text>
+            <Text style={[styles.segmentText, isRegister && styles.segmentTextActive]}>
+              Crear cuenta
+            </Text>
           </Pressable>
         </View>
 
-        <Text style={styles.title}>{isRegister ? 'Crear cuenta' : 'Iniciar sesión'}</Text>
-        <Text style={styles.hint}>
-          {isRegister
-            ? 'Nickname, email, contraseña e idioma. Los datos se guardan en Supabase cuando está configurado.'
-            : 'Email y contraseña. Solo campos de login — sin nickname.'}
-        </Text>
+        {supabaseEnabled ? (
+          <Pressable
+            style={({ pressed }) => [styles.googleBtn, pressed && styles.pressed]}
+            onPress={onGoogle}
+            disabled={googleLoading || loading}
+          >
+            {googleLoading ? (
+              <ActivityIndicator color={colors.text} />
+            ) : (
+              <>
+                <View style={styles.googleGWrap}>
+                  <Text style={styles.googleG}>G</Text>
+                </View>
+                <Text style={styles.googleLabel}>Continuar con Google</Text>
+              </>
+            )}
+          </Pressable>
+        ) : null}
 
-        {isRegister && (
+        {supabaseEnabled ? (
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <View style={styles.dividerDot} />
+            <View style={styles.dividerLine} />
+          </View>
+        ) : null}
+
+        {isRegister ? (
           <>
-            <Text style={styles.label}>Nickname</Text>
             <TextInput
               style={styles.input}
               value={nickname}
               onChangeText={setNickname}
               autoCapitalize="words"
-              placeholder="e.g. Carlos"
+              placeholder="Nickname"
+              placeholderTextColor={colors.textMuted}
             />
-
-            <Text style={styles.label}>Idioma</Text>
             <View style={styles.langGrid}>
               {LANGUAGES.map((l) => (
                 <Pressable
@@ -233,86 +288,188 @@ export default function LoginScreen() {
               ))}
             </View>
           </>
-        )}
+        ) : null}
 
-        <Text style={styles.label}>Email</Text>
         <TextInput
           style={styles.input}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
-          placeholder="you@example.com"
+          autoCorrect={false}
+          placeholder="Email"
+          placeholderTextColor={colors.textMuted}
         />
-        <Text style={styles.label}>Contraseña (mín. 8)</Text>
         <TextInput
           style={styles.input}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
-          placeholder="••••••••"
+          placeholder="Password"
+          placeholderTextColor={colors.textMuted}
         />
 
         {formError ? (
           <View style={[styles.feedbackBox, resendOk && styles.feedbackBoxOk]}>
             <Text style={[styles.feedbackText, resendOk && styles.feedbackTextOk]}>{formError}</Text>
             {needsEmailConfirm ? (
-              <PrimaryButton
-                label={resendBusy ? 'Enviando...' : 'Reenviar email de confirmación'}
-                variant="secondary"
-                onPress={resendConfirmation}
-                style={{ marginTop: spacing.sm }}
-              />
+              <Pressable onPress={resendConfirmation} style={styles.linkBtn}>
+                <Text style={styles.link}>
+                  {resendBusy ? 'Enviando…' : 'Reenviar email de confirmación'}
+                </Text>
+              </Pressable>
             ) : null}
           </View>
         ) : null}
 
-        <PrimaryButton
-          label={loading ? '...' : isRegister ? 'Registrarse' : 'Entrar'}
+        <Pressable
+          style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
           onPress={submit}
-          style={{ marginTop: spacing.lg }}
-        />
+          disabled={loading || googleLoading}
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.white} />
+          ) : (
+            <Text style={styles.primaryLabel}>{isRegister ? 'Crear cuenta' : 'Entrar'}</Text>
+          )}
+        </Pressable>
+
+        {!isRegister ? (
+          <Pressable onPress={onForgotPassword} style={styles.forgotWrap}>
+            <Text style={styles.link}>¿Olvidaste la contraseña?</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: { padding: spacing.lg },
-  toggleRow: {
+  flex: { flex: 1, backgroundColor: colors.loginBg },
+  container: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xl,
+    justifyContent: 'center',
+  },
+  segment: {
     flexDirection: 'row',
+    backgroundColor: '#E2EBE4',
+    borderRadius: 28,
+    padding: 4,
     marginBottom: spacing.lg,
-    borderRadius: 10,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-  toggleBtn: {
+  segmentBtn: {
     flex: 1,
-    paddingVertical: spacing.sm,
+    paddingVertical: 14,
     alignItems: 'center',
-    backgroundColor: colors.white,
+    borderRadius: 24,
   },
-  toggleBtnActive: { backgroundColor: colors.primary },
-  toggleText: { fontWeight: '600', color: colors.textMuted },
-  toggleTextActive: { color: colors.white },
-  title: { fontSize: 24, fontWeight: '700', color: colors.text },
-  hint: { fontSize: 13, color: colors.textMuted, marginTop: spacing.sm, marginBottom: spacing.lg },
-  label: { fontWeight: '600', marginBottom: spacing.xs, color: colors.text },
+  segmentBtnActive: {
+    backgroundColor: colors.white,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  segmentText: {
+    fontFamily: fonts.semibold,
+    fontSize: 16,
+    color: '#7A8F82',
+  },
+  segmentTextActive: {
+    fontFamily: fonts.bold,
+    color: colors.primaryDark,
+  },
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderRadius: 28,
+    paddingVertical: 16,
+    marginBottom: spacing.md,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+    gap: 10,
+  },
+  googleGWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleG: {
+    fontFamily: fonts.extrabold,
+    fontSize: 22,
+    color: '#4285F4',
+  },
+  googleLabel: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: colors.text,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.md,
+    gap: 8,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#D5DDD7' },
+  dividerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#C5D0C8',
+  },
   input: {
     backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    padding: spacing.md,
+    borderColor: '#E0E6E2',
+    borderRadius: 16,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 16,
     marginBottom: spacing.md,
     fontSize: 16,
+    fontFamily: fonts.regular,
+    color: colors.text,
   },
+  primaryBtn: {
+    backgroundColor: colors.primaryDark,
+    borderRadius: 16,
+    paddingVertical: 18,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    shadowColor: colors.primaryDark,
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  primaryLabel: {
+    color: colors.white,
+    fontSize: 17,
+    fontFamily: fonts.bold,
+  },
+  forgotWrap: { marginTop: spacing.lg, alignItems: 'center' },
+  link: {
+    fontFamily: fonts.semibold,
+    color: colors.primaryDark,
+    fontSize: 14,
+  },
+  linkBtn: { marginTop: spacing.sm },
+  pressed: { opacity: 0.88 },
   feedbackBox: {
     backgroundColor: colors.dangerBg,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: spacing.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: '#FFCDD2',
   },
@@ -324,19 +481,23 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontSize: 14,
     lineHeight: 20,
+    fontFamily: fonts.regular,
   },
-  feedbackTextOk: {
-    color: colors.safe,
+  feedbackTextOk: { color: colors.safe },
+  langGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
-  langGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
   langChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: 8,
+    borderRadius: 16,
     backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E0E6E2',
   },
   langChipSelected: { borderColor: colors.primary, backgroundColor: '#E8F5EE' },
-  langChipText: { fontSize: 14 },
+  langChipText: { fontSize: 13, fontFamily: fonts.semibold },
 });

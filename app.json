@@ -17,7 +17,9 @@
     },
     "android": {
       "package": "com.safebite.app",
-      "permissions": ["CAMERA"],
+      "permissions": [
+        "CAMERA"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#1B5E3B",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -38,7 +40,8 @@
         {
           "cameraPermission": "Allow SafeBite to scan barcodes on food packages."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

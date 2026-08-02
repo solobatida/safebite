@@ -22,7 +22,7 @@ export function ScanResultCard({ result, lang }: { result: ScanResult; lang: UiL
         <View style={styles.matchedBox}>
           {result.matched.map((m) => (
             <Text key={m.id} style={styles.matchedItem}>
-              • {m.label} ({m.matchedTerm})
+              {m.label}
             </Text>
           ))}
         </View>
@@ -48,11 +48,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.sm,
   },
-  verdict: { fontSize: 18, fontWeight: '700', marginTop: spacing.sm },
+  verdict: { fontSize: 18, fontWeight: '700', marginTop: spacing.sm, textAlign: 'center' },
   safeText: { color: colors.safe },
   dangerText: { color: colors.danger },
-  matchedBox: { alignSelf: 'stretch', marginTop: spacing.md },
-  matchedItem: { fontSize: 15, color: colors.text, marginBottom: 4 },
+  matchedBox: {
+    marginTop: spacing.md,
+    width: '100%',
+    alignItems: 'center',
+  },
+  matchedItem: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.danger,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
   disclaimer: {
     fontSize: 11,
     color: colors.textMuted,

@@ -139,9 +139,9 @@ type DbFamilyProfileRow = {
 export async function ensureCloudAccountSession(): Promise<UserSession | null> {
   if (!supabaseEnabled || !supabase) return null;
 
-  const { data: userData, error: userErr } = await supabase.auth.getUser();
-  if (userErr) throw userErr;
-  const user = userData.user;
+  // Prefer getSession — getUser() throws AuthSessionMissingError when logged out
+  const { data: sessionData } = await supabase.auth.getSession();
+  const user = sessionData.session?.user;
   if (!user?.id || !user.email) return null;
 
   // Load profile (created by trigger) or fallback to auth metadata.
@@ -157,6 +157,8 @@ export async function ensureCloudAccountSession(): Promise<UserSession | null> {
     (typeof user.user_metadata?.account_nickname === 'string'
       ? user.user_metadata.account_nickname
       : '') ||
+    (typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : '') ||
+    (typeof user.user_metadata?.name === 'string' ? user.user_metadata.name : '') ||
     user.email.split('@')[0];
 
   const uiLanguage: UiLanguage =
@@ -187,6 +189,12 @@ export async function ensureCloudAccountSession(): Promise<UserSession | null> {
     uiLanguage,
   };
   await setSession(session);
+  try {
+    const { clearIngredientsCache } = await import('@/lib/ingredients');
+    clearIngredientsCache();
+  } catch {
+    // ignore
+  }
   return session;
 }
 
@@ -482,12 +490,41 @@ export async function updateUiLanguage(lang: UiLanguage): Promise<void> {
 
   if (session.isGuest) return;
 
-  if (supabaseEnabled && supabase) {
-    // Keep profile in sync for cloud accounts
-    const { data } = await supabase.auth.getUser();
-    if (data.user?.id) {
-      await supabase.from('profiles').update({ ui_language: lang }).eq('id', data.user.id);
-    }
+  if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ ui_language: lang })
+      .eq('id', session.userId);
+    if (error) throw error;
+  }
+}
+
+export async function updateAccountNickname(nickname: string): Promise<void> {
+  const session = await getSession();
+  if (!session) throw new Error('Not signed in');
+  const name = nickname.trim();
+  if (name.length < 2) throw new Error('Nickname must be at least 2 characters.');
+
+  await setSession({ ...session, accountNickname: name });
+
+  if (session.isGuest) return;
+
+  if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ account_nickname: name })
+      .eq('id', session.userId);
+    if (error) throw error;
+    return;
+  }
+
+  // Local accounts
+  const accounts = await getLocalAccounts();
+  const account = accounts[session.email];
+  if (account) {
+    account.accountNickname = name;
+    accounts[session.email] = account;
+    await AsyncStorage.setItem(KEYS.accounts, JSON.stringify(accounts));
   }
 }
 
@@ -502,12 +539,27 @@ export async function getAvoidList(): Promise<string[]> {
   if (session.isGuest) return [...guestAvoidList];
 
   if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
+    // All family profiles under this account (avoids empty list if active profile id drifted)
+    const { data: profiles, error: profErr } = await supabase
+      .from('family_profiles')
+      .select('id')
+      .eq('account_id', session.userId);
+    if (profErr) throw profErr;
+
+    const profileIds = (profiles ?? []).map((p: { id: string }) => p.id);
+    if (profileIds.length === 0) {
+      // Fallback to session profile id
+      profileIds.push(session.activeProfileId);
+    }
+
     const { data, error } = await supabase
       .from('user_avoid_ingredients')
       .select('ingredient_id')
-      .eq('family_profile_id', session.activeProfileId);
+      .in('family_profile_id', profileIds);
     if (error) throw error;
-    return (data ?? []).map((r: any) => r.ingredient_id as string);
+
+    const unique = [...new Set((data ?? []).map((r: { ingredient_id: string }) => r.ingredient_id))];
+    return unique;
   }
 
   await migrateLegacyAvoidList(session.email, session.activeProfileId);

@@ -6,6 +6,7 @@ export const colors = {
   safe: '#2E7D32',
   safeBg: '#E8F5E9',
   background: '#F5F7F4',
+  loginBg: '#EEF3EF',
   shelfDark: '#3E2723',
   shelfMid: '#5D4037',
   boomYellow: '#FFD54F',

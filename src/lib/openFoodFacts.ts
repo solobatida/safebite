@@ -34,11 +34,12 @@ export async function fetchProductByBarcode(barcode: string): Promise<ProductLoo
 
   const ingredientsText =
     p.ingredients_text ||
+    p.ingredients_text_ca ||
+    p.ingredients_text_es ||
     p.ingredients_text_en ||
     p.ingredients_text_fr ||
     p.ingredients_text_de ||
     p.ingredients_text_it ||
-    p.ingredients_text_es ||
     Object.entries(p)
       .filter(([k]) => k.startsWith('ingredients_text'))
       .map(([, v]) => (typeof v === 'string' ? v : ''))

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { ShelfBackground } from '@/components/ShelfBackground';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { getSession, isGuestSession } from '@/lib/storage';
+import { fonts } from '@/constants/fonts';
 import { colors, spacing } from '@/constants/theme';
 
 export default function WelcomeScreen() {
@@ -44,19 +45,20 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   logo: {
     fontSize: 42,
-    fontWeight: '900',
+    fontFamily: fonts.extrabold,
     color: colors.primaryDark,
     textAlign: 'center',
   },
   slogan: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: fonts.semibold,
     color: colors.text,
     textAlign: 'center',
     marginTop: spacing.sm,
   },
   sub: {
     fontSize: 14,
+    fontFamily: fonts.regular,
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.md,

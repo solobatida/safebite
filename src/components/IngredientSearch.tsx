@@ -78,24 +78,24 @@ export function AvoidList({
   catalog: Ingredient[];
   onRemove: (id: string) => void;
 }) {
-  const items = ids
-    .map((id) => catalog.find((c) => c.id === id))
-    .filter(Boolean) as Ingredient[];
-
-  if (items.length === 0) {
+  if (ids.length === 0) {
     return <Text style={styles.empty}>Add ingredients you need to avoid.</Text>;
   }
 
   return (
     <View style={styles.list}>
-      {items.map((item) => (
-        <View key={item.id} style={styles.chip}>
-          <Text style={styles.chipText}>{getDisplayLabel(item, lang)}</Text>
-          <Pressable onPress={() => onRemove(item.id)} hitSlop={8}>
-            <Text style={styles.remove}>✕</Text>
-          </Pressable>
-        </View>
-      ))}
+      {ids.map((id) => {
+        const item = catalog.find((c) => c.id === id);
+        const label = item ? getDisplayLabel(item, lang) : id.replace(/^custom-/, '').replace(/-/g, ' ');
+        return (
+          <View key={id} style={styles.chip}>
+            <Text style={styles.chipText}>{label}</Text>
+            <Pressable onPress={() => onRemove(id)} hitSlop={8}>
+              <Text style={styles.remove}>✕</Text>
+            </Pressable>
+          </View>
+        );
+      })}
     </View>
   );
 }
