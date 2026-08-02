@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { createGuestSession } from '@/lib/storage';
 import { LANGUAGES } from '@/constants/languages';
+import { t } from '@/i18n/translations';
 import type { UiLanguage } from '@/types';
 import { colors, spacing } from '@/constants/theme';
 
@@ -24,11 +25,10 @@ export default function LanguageScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Elige tu idioma</Text>
+      <Stack.Screen options={{ title: t(selected, 'navLanguage') }} />
+      <Text style={styles.title}>{t(selected, 'languageTitle')}</Text>
       <Text style={styles.sub}>
-        {isGuest
-          ? 'Modo amigo: puedes usar la app, pero al cerrarla no se guardan los datos.'
-          : 'Idioma de la interfaz para menús y resultados.'}
+        {isGuest ? t(selected, 'languageGuestHint') : t(selected, 'languageHint')}
       </Text>
       {LANGUAGES.map((l) => (
         <Pressable
@@ -39,7 +39,11 @@ export default function LanguageScreen() {
           <Text style={styles.rowText}>{l.label}</Text>
         </Pressable>
       ))}
-      <PrimaryButton label="Continuar" onPress={continueFlow} style={{ marginTop: spacing.lg }} />
+      <PrimaryButton
+        label={t(selected, 'continue')}
+        onPress={continueFlow}
+        style={{ marginTop: spacing.lg }}
+      />
     </View>
   );
 }

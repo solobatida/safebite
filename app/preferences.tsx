@@ -12,7 +12,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { IngredientSearch, AvoidList } from '@/components/IngredientSearch';
 import { ProfileSwitcher } from '@/components/ProfileSwitcher';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -54,8 +54,8 @@ export default function PreferencesScreen() {
       setCatalog(ingredients);
     } catch (e) {
       Alert.alert(
-        'Error al cargar',
-        e instanceof Error ? e.message : 'No se pudieron cargar tus ingredientes'
+        t(lang, 'error'),
+        e instanceof Error ? e.message : t(lang, 'errorLoad')
       );
     }
   }, [router]);
@@ -74,7 +74,7 @@ export default function PreferencesScreen() {
       await setAvoidList(next);
     } catch (e) {
       setAvoidIds(avoidIds);
-      Alert.alert('Error', e instanceof Error ? e.message : 'No se pudo guardar el ingrediente');
+      Alert.alert(t(lang, 'error'), e instanceof Error ? e.message : t(lang, 'errorSave'));
     }
   };
 
@@ -85,14 +85,14 @@ export default function PreferencesScreen() {
       await setAvoidList(next);
     } catch (e) {
       setAvoidIds(avoidIds);
-      Alert.alert('Error', e instanceof Error ? e.message : 'No se pudo quitar el ingrediente');
+      Alert.alert(t(lang, 'error'), e instanceof Error ? e.message : t(lang, 'errorRemove'));
     }
   };
 
   const saveCustom = async () => {
     const text = customName.trim();
     if (text.length < 2) {
-      Alert.alert('Error', 'Escribe al menos 2 caracteres.');
+      Alert.alert(t(lang, 'error'), t(lang, 'errorMinChars'));
       return;
     }
 
@@ -109,10 +109,8 @@ export default function PreferencesScreen() {
       setCustomModal(false);
     } catch (e) {
       Alert.alert(
-        'Error al guardar',
-        e instanceof Error
-          ? e.message
-          : 'No se pudo guardar. Si usas Supabase, ejecuta ingredients-custom-policy.sql'
+        t(lang, 'error'),
+        e instanceof Error ? e.message : t(lang, 'errorSaveCustom')
       );
     } finally {
       setSavingCustom(false);
@@ -123,10 +121,9 @@ export default function PreferencesScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <Stack.Screen options={{ title: t(lang, 'navPreferences') }} />
       {isGuest ? (
-        <Text style={styles.guestBanner}>
-          Modo amigo — tus ingredientes no se guardan al cerrar la app.
-        </Text>
+        <Text style={styles.guestBanner}>{t(lang, 'guestBanner')}</Text>
       ) : null}
 
       <ProfileSwitcher
@@ -155,7 +152,7 @@ export default function PreferencesScreen() {
       <Text style={styles.listTitle}>{t(lang, 'myAvoidList')}</Text>
       <AvoidList ids={avoidIds} lang={lang} catalog={catalog} onRemove={removeAvoid} />
       <PrimaryButton
-        label="Añadir ingrediente"
+        label={t(lang, 'addIngredient')}
         variant="secondary"
         onPress={() => setCustomModal(true)}
         style={{ marginTop: spacing.sm }}
@@ -170,37 +167,35 @@ export default function PreferencesScreen() {
             onPress={() => !savingCustom && setCustomModal(false)}
           />
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Nuevo ingrediente</Text>
-            <Text style={styles.modalHint}>
-              Se guardará en el catálogo y en todos los idiomas (mismo nombre por ahora).
-            </Text>
+            <Text style={styles.modalTitle}>{t(lang, 'newIngredient')}</Text>
+            <Text style={styles.modalHint}>{t(lang, 'newIngredientHint')}</Text>
             <TextInput
               style={styles.modalInput}
               value={customName}
               onChangeText={setCustomName}
-              placeholder="ej. sorbitol, almidón de maíz"
+              placeholder={t(lang, 'customIngredientPlaceholder')}
               placeholderTextColor={colors.textMuted}
               autoFocus
               editable={!savingCustom}
             />
-            <PrimaryButton label={savingCustom ? '...' : 'Guardar'} onPress={saveCustom} />
+            <PrimaryButton label={savingCustom ? '...' : t(lang, 'save')} onPress={saveCustom} />
             {savingCustom ? (
               <ActivityIndicator style={{ marginTop: 12 }} color={colors.primary} />
             ) : (
               <Pressable onPress={() => setCustomModal(false)} style={{ marginTop: 12 }}>
-                <Text style={styles.cancel}>Cancelar</Text>
+                <Text style={styles.cancel}>{t(lang, 'cancel')}</Text>
               </Pressable>
             )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
       <PrimaryButton
-        label="Ir a escanear"
+        label={t(lang, 'goToScan')}
         onPress={() => router.push('/scan')}
         style={{ marginTop: spacing.md }}
       />
       <PrimaryButton
-        label={isGuest ? 'Salir (modo amigo)' : t(lang, 'signOut')}
+        label={isGuest ? t(lang, 'guestSignOut') : t(lang, 'signOut')}
         variant="danger"
         onPress={async () => {
           await clearSession();

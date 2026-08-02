@@ -84,12 +84,12 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ title: 'SafeBite', headerStyle: { backgroundColor: colors.primaryDark } }} />
-        <Stack.Screen name="language" options={{ title: 'Idioma' }} />
-        <Stack.Screen name="preferences" options={{ title: 'Preferencias' }} />
-        <Stack.Screen name="account" options={{ title: 'Cuenta' }} />
-        <Stack.Screen name="scan" options={{ title: 'Escanear' }} />
+        <Stack.Screen name="language" options={{ title: 'Language' }} />
+        <Stack.Screen name="preferences" options={{ title: 'Preferences' }} />
+        <Stack.Screen name="account" options={{ title: 'Account' }} />
+        <Stack.Screen name="scan" options={{ title: 'Scan' }} />
         <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/reset" options={{ title: 'Nueva contraseña' }} />
+        <Stack.Screen name="auth/reset" options={{ title: 'Password' }} />
       </Stack>
     </>
   );

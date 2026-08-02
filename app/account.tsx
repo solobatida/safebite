@@ -9,7 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import {
   getSession,
@@ -53,7 +53,7 @@ export default function AccountScreen() {
       await updateUiLanguage(code);
       setLang(code);
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'No se pudo cambiar el idioma');
+      Alert.alert(t(lang, 'error'), e instanceof Error ? e.message : t(lang, 'authGeneric'));
     }
   };
 
@@ -61,9 +61,9 @@ export default function AccountScreen() {
     setSaving(true);
     try {
       await updateAccountNickname(nickname);
-      Alert.alert('OK', 'Nickname actualizado');
+      Alert.alert('OK', t(lang, 'nicknameUpdated'));
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'No se pudo guardar');
+      Alert.alert(t(lang, 'error'), e instanceof Error ? e.message : t(lang, 'errorSave'));
     } finally {
       setSaving(false);
     }
@@ -71,12 +71,11 @@ export default function AccountScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <Stack.Screen options={{ title: t(lang, 'navAccount') }} />
       <Text style={styles.title}>{t(lang, 'accountSettingsTitle')}</Text>
 
       {isGuest ? (
-        <Text style={styles.guestNote}>
-          Modo amigo: el nickname e idioma solo duran esta sesión.
-        </Text>
+        <Text style={styles.guestNote}>{t(lang, 'guestAccountNote')}</Text>
       ) : null}
 
       <Text style={styles.label}>{t(lang, 'nickname')}</Text>
@@ -85,7 +84,7 @@ export default function AccountScreen() {
         value={nickname}
         onChangeText={setNickname}
         autoCapitalize="words"
-        placeholder="ej. Carlos"
+        placeholder={t(lang, 'nicknamePlaceholder')}
         placeholderTextColor={colors.textMuted}
         editable={!saving}
       />

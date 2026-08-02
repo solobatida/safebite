@@ -24,6 +24,7 @@ import { fonts } from '@/constants/fonts';
 import { colors, spacing } from '@/constants/theme';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { getAuthErrorMessage, isEmailNotConfirmedError } from '@/lib/authErrors';
+import { t } from '@/i18n/translations';
 import type { UiLanguage } from '@/types';
 
 export default function LoginScreen() {
@@ -39,6 +40,7 @@ export default function LoginScreen() {
   const [needsEmailConfirm, setNeedsEmailConfirm] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
   const [resendOk, setResendOk] = useState(false);
+  const lang = uiLanguage;
 
   useEffect(() => {
     clearGuestSession();
@@ -59,7 +61,7 @@ export default function LoginScreen() {
 
   const resendConfirmation = async () => {
     if (!supabase || !email.trim()) {
-      setFormError('Introduce tu email arriba para reenviar la confirmación.');
+      setFormError(t(lang, 'resendNeedEmail'));
       return;
     }
     setResendBusy(true);
@@ -67,10 +69,10 @@ export default function LoginScreen() {
     try {
       const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim() });
       if (error) throw error;
-      setFormError('Email de confirmación reenviado. Revisa tu bandeja y spam.');
+      setFormError(t(lang, 'confirmResent'));
       setResendOk(true);
     } catch (e) {
-      setFormError(getAuthErrorMessage(e));
+      setFormError(getAuthErrorMessage(e, lang));
     } finally {
       setResendBusy(false);
     }
@@ -79,16 +81,16 @@ export default function LoginScreen() {
   const onForgotPassword = async () => {
     clearFeedback();
     if (!email.trim()) {
-      setFormError('Escribe tu email arriba y pulsa otra vez “¿Olvidaste la contraseña?”.');
+      setFormError(t(lang, 'forgotNeedEmail'));
       return;
     }
     setLoading(true);
     try {
       await sendPasswordResetEmail(email);
-      setFormError('Te hemos enviado un email para restablecer la contraseña. Revisa bandeja y spam.');
+      setFormError(t(lang, 'resetEmailSent'));
       setResendOk(true);
     } catch (e) {
-      setFormError(getAuthErrorMessage(e));
+      setFormError(getAuthErrorMessage(e, lang));
     } finally {
       setLoading(false);
     }
@@ -97,7 +99,7 @@ export default function LoginScreen() {
   const onGoogle = async () => {
     clearFeedback();
     if (!supabaseEnabled) {
-      setFormError('Configura Supabase para usar Google Login.');
+      setFormError(t(lang, 'configureGoogle'));
       return;
     }
     setGoogleLoading(true);
@@ -106,7 +108,7 @@ export default function LoginScreen() {
       // On web, browser redirects to /auth/callback — no session returned here
       if (session) goIn();
     } catch (e) {
-      setFormError(getAuthErrorMessage(e));
+      setFormError(getAuthErrorMessage(e, lang));
       setGoogleLoading(false);
     }
   };
@@ -115,15 +117,15 @@ export default function LoginScreen() {
     clearFeedback();
 
     if (!email || !password) {
-      setFormError('Email y contraseña son obligatorios');
+      setFormError(t(lang, 'emailPasswordRequired'));
       return;
     }
     if (isRegister && nickname.trim().length < 2) {
-      setFormError('Introduce un nickname (mín. 2 caracteres)');
+      setFormError(t(lang, 'nicknameRequired'));
       return;
     }
     if (password.length < 8) {
-      setFormError('La contraseña debe tener al menos 8 caracteres');
+      setFormError(t(lang, 'passwordTooShort'));
       return;
     }
 
@@ -144,9 +146,7 @@ export default function LoginScreen() {
           if (error) throw error;
 
           if (!data.session) {
-            setFormError(
-              'Cuenta creada. Confirma el email y luego inicia sesión con Entrar.'
-            );
+            setFormError(t(lang, 'accountCreatedConfirm'));
             setNeedsEmailConfirm(true);
             setIsRegister(false);
             return;
@@ -197,14 +197,14 @@ export default function LoginScreen() {
       } else {
         const isLocal = await hasLocalAccount(email);
         if (!isLocal) {
-          setFormError('No hay cuenta local con este email. Regístrate primero.');
+          setFormError(t(lang, 'authUserExists'));
           return;
         }
         await loginLocalUser(email, password);
       }
       goIn();
     } catch (e) {
-      setFormError(getAuthErrorMessage(e));
+      setFormError(getAuthErrorMessage(e, lang));
       if (isEmailNotConfirmedError(e)) setNeedsEmailConfirm(true);
     } finally {
       setLoading(false);
@@ -226,7 +226,7 @@ export default function LoginScreen() {
             onPress={() => switchMode(false)}
           >
             <Text style={[styles.segmentText, !isRegister && styles.segmentTextActive]}>
-              Entrar
+              {t(lang, 'tabSignIn')}
             </Text>
           </Pressable>
           <Pressable
@@ -234,9 +234,21 @@ export default function LoginScreen() {
             onPress={() => switchMode(true)}
           >
             <Text style={[styles.segmentText, isRegister && styles.segmentTextActive]}>
-              Crear cuenta
+              {t(lang, 'tabRegister')}
             </Text>
           </Pressable>
+        </View>
+
+        <View style={styles.langGrid}>
+          {LANGUAGES.map((l) => (
+            <Pressable
+              key={l.code}
+              style={[styles.langChip, uiLanguage === l.code && styles.langChipSelected]}
+              onPress={() => setUiLanguage(l.code)}
+            >
+              <Text style={styles.langChipText}>{l.label}</Text>
+            </Pressable>
+          ))}
         </View>
 
         {supabaseEnabled ? (
@@ -252,7 +264,7 @@ export default function LoginScreen() {
                 <View style={styles.googleGWrap}>
                   <Text style={styles.googleG}>G</Text>
                 </View>
-                <Text style={styles.googleLabel}>Continuar con Google</Text>
+                <Text style={styles.googleLabel}>{t(lang, 'continueWithGoogle')}</Text>
               </>
             )}
           </Pressable>
@@ -267,27 +279,14 @@ export default function LoginScreen() {
         ) : null}
 
         {isRegister ? (
-          <>
-            <TextInput
-              style={styles.input}
-              value={nickname}
-              onChangeText={setNickname}
-              autoCapitalize="words"
-              placeholder="Nickname"
-              placeholderTextColor={colors.textMuted}
-            />
-            <View style={styles.langGrid}>
-              {LANGUAGES.map((l) => (
-                <Pressable
-                  key={l.code}
-                  style={[styles.langChip, uiLanguage === l.code && styles.langChipSelected]}
-                  onPress={() => setUiLanguage(l.code)}
-                >
-                  <Text style={styles.langChipText}>{l.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </>
+          <TextInput
+            style={styles.input}
+            value={nickname}
+            onChangeText={setNickname}
+            autoCapitalize="words"
+            placeholder={t(lang, 'nickname')}
+            placeholderTextColor={colors.textMuted}
+          />
         ) : null}
 
         <TextInput
@@ -297,7 +296,7 @@ export default function LoginScreen() {
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
-          placeholder="Email"
+          placeholder={t(lang, 'email')}
           placeholderTextColor={colors.textMuted}
         />
         <TextInput
@@ -305,7 +304,7 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
-          placeholder="Password"
+          placeholder={t(lang, 'password')}
           placeholderTextColor={colors.textMuted}
         />
 
@@ -315,7 +314,7 @@ export default function LoginScreen() {
             {needsEmailConfirm ? (
               <Pressable onPress={resendConfirmation} style={styles.linkBtn}>
                 <Text style={styles.link}>
-                  {resendBusy ? 'Enviando…' : 'Reenviar email de confirmación'}
+                  {resendBusy ? '…' : t(lang, 'resendConfirmation')}
                 </Text>
               </Pressable>
             ) : null}
@@ -330,13 +329,15 @@ export default function LoginScreen() {
           {loading ? (
             <ActivityIndicator color={colors.white} />
           ) : (
-            <Text style={styles.primaryLabel}>{isRegister ? 'Crear cuenta' : 'Entrar'}</Text>
+            <Text style={styles.primaryLabel}>
+              {isRegister ? t(lang, 'register') : t(lang, 'signIn')}
+            </Text>
           )}
         </Pressable>
 
         {!isRegister ? (
           <Pressable onPress={onForgotPassword} style={styles.forgotWrap}>
-            <Text style={styles.link}>¿Olvidaste la contraseña?</Text>
+            <Text style={styles.link}>{t(lang, 'forgotPassword')}</Text>
           </Pressable>
         ) : null}
       </ScrollView>

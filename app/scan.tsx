@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { ScanResultCard } from '@/components/ScanResultCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { getSession, getAvoidList } from '@/lib/storage';
@@ -64,10 +64,10 @@ export default function ScanScreen() {
       if (res.unknown && res.unknown.length > 0) {
         const term = res.unknown[0];
         Alert.alert(
-          'Unknown term',
+          t(lang, 'unknownTerm'),
           t(lang, 'unknownPrompt', { term }),
           [
-            { text: 'Skip', style: 'cancel' },
+            { text: t(lang, 'skip'), style: 'cancel' },
             {
               text: t(lang, 'addUnknown'),
               onPress: () => router.push('/preferences'),
@@ -85,14 +85,16 @@ export default function ScanScreen() {
   if (Platform.OS !== 'web' && !permission?.granted) {
     return (
       <View style={styles.center}>
-        <Text style={styles.hint}>Camera permission is required to scan barcodes.</Text>
-        <PrimaryButton label="Allow camera" onPress={requestPermission} />
+        <Stack.Screen options={{ title: t(lang, 'navScan') }} />
+        <Text style={styles.hint}>{t(lang, 'cameraPermission')}</Text>
+        <PrimaryButton label={t(lang, 'allowCamera')} onPress={requestPermission} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <Stack.Screen options={{ title: t(lang, 'navScan') }} />
       {FEATURES.familyProfiles && profileName ? (
         <Text style={styles.profileBanner}>{t(lang, 'scanForProfile', { name: profileName })}</Text>
       ) : null}
@@ -108,18 +110,16 @@ export default function ScanScreen() {
 
       {Platform.OS === 'web' && (
         <View style={styles.webBox}>
-          <Text style={styles.hint}>
-            Barcode camera works on a physical phone (Expo Go). On web, enter a barcode or use demo.
-          </Text>
+          <Text style={styles.hint}>{t(lang, 'webScanHint')}</Text>
           <TextInput
             style={styles.input}
-            placeholder="Barcode number"
+            placeholder={t(lang, 'barcodePlaceholder')}
             value={manualCode}
             onChangeText={setManualCode}
             keyboardType="number-pad"
           />
           <PrimaryButton
-            label="Check product"
+            label={t(lang, 'checkProduct')}
             onPress={() => manualCode && runCheck(manualCode)}
           />
         </View>
@@ -141,17 +141,20 @@ export default function ScanScreen() {
 
       {!scanning && (
         <PrimaryButton
-          label="Scan again"
+          label={t(lang, 'scanAgain')}
+          variant={result && !result.safe ? 'danger' : 'primary'}
           onPress={() => {
             setResult(null);
             setLastCode('');
             setScanning(true);
           }}
-          style={{ marginTop: spacing.md }}
+          style={{
+            marginTop: spacing.md,
+            borderRadius: 14,
+            ...(result?.safe ? { backgroundColor: '#1FA855' } : null),
+          }}
         />
       )}
-
-      <Text style={styles.disclaimer}>{t(lang, 'disclaimer')}</Text>
     </View>
   );
 }
@@ -180,5 +183,4 @@ const styles = StyleSheet.create({
   demoRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, flexWrap: 'wrap' },
   demoLabel: { marginRight: spacing.sm, color: colors.textMuted },
   demoBtn: { paddingVertical: 8, paddingHorizontal: 12 },
-  disclaimer: { fontSize: 11, color: colors.textMuted, marginTop: spacing.lg, textAlign: 'center' },
 });

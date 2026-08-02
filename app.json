@@ -12,16 +12,19 @@
       "bundleIdentifier": "com.safebite.app",
       "infoPlist": {
         "NSCameraUsageDescription": "SafeBite uses the camera to scan product barcodes in the supermarket.",
-        "NSPhotoLibraryUsageDescription": "Optional: save product scan history."
+        "NSPhotoLibraryUsageDescription": "Optional: save product scan history.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.safebite.app",
       "permissions": [
-        "CAMERA"
+        "CAMERA",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#1B5E3B",
+        "backgroundColor": "#1E7A47",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -45,6 +48,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7e34393a-21d7-4d4f-a30d-91196d8d3c0e"
+      }
     }
   }
 }

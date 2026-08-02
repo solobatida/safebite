@@ -7,6 +7,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { searchIngredients, getDisplayLabel } from '@/lib/ingredients';
+import { t } from '@/i18n/translations';
 import type { Ingredient, UiLanguage } from '@/types';
 import { colors, spacing } from '@/constants/theme';
 
@@ -79,7 +80,7 @@ export function AvoidList({
   onRemove: (id: string) => void;
 }) {
   if (ids.length === 0) {
-    return <Text style={styles.empty}>Add ingredients you need to avoid.</Text>;
+    return <Text style={styles.empty}>{t(lang, 'avoidListEmpty')}</Text>;
   }
 
   return (
