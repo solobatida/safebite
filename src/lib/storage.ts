@@ -165,7 +165,7 @@ export async function ensureCloudAccountSession(): Promise<UserSession | null> {
     (profile?.ui_language as UiLanguage | undefined) ||
     (typeof user.user_metadata?.ui_language === 'string'
       ? (user.user_metadata.ui_language as UiLanguage)
-      : 'en');
+      : 'es');
 
   // Default family profile row is created by trigger.
   const { data: fp, error: fpErr } = await supabase

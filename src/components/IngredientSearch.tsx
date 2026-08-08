@@ -28,6 +28,11 @@ export function IngredientSearch({
   const excluded = new Set(excludeIds);
 
   useEffect(() => {
+    setQuery('');
+    setSuggestions([]);
+  }, [lang]);
+
+  useEffect(() => {
     let cancelled = false;
     const run = async () => {
       const results = await searchIngredients(query, 12, lang);
@@ -42,7 +47,7 @@ export function IngredientSearch({
   }, [query, lang, excludeIds.join('|')]);
 
   return (
-    <View>
+    <View key={lang}>
       <TextInput
         style={styles.input}
         placeholder={placeholder}
@@ -56,7 +61,7 @@ export function IngredientSearch({
         <View style={styles.dropdown}>
           {suggestions.map((item) => (
             <Pressable
-              key={item.id}
+              key={`${lang}-${item.id}`}
               style={styles.suggestion}
               onPress={() => {
                 onSelect(item);

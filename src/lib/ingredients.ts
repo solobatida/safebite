@@ -76,33 +76,43 @@ export function normalize(text: string): string {
     .trim();
 }
 
+/** Terms used only for suggestion search — active UI language label, never other languages. */
+function suggestionTerms(ing: Ingredient, lang: UiLanguage): string[] {
+  const label = ing.labels[lang]?.trim();
+  if (!label) return [];
+  const terms = [normalize(label)];
+  for (const word of normalize(label).split(' ')) {
+    if (word.length >= 2) terms.push(word);
+  }
+  return terms;
+}
+
 export async function searchIngredients(
   query: string,
   limit = 12,
-  lang: UiLanguage = 'en'
+  lang: UiLanguage = 'es'
 ): Promise<Ingredient[]> {
   const list = await loadIngredients();
   const q = normalize(query);
 
-  // Only surface ingredients that have a label in the active UI language
-  const withLang = list.filter((ing) => Boolean(ing.labels[lang]?.trim() || ing.labels.en?.trim()));
+  // Suggestions only for ingredients with a label in the active UI language
+  const withLang = list.filter((ing) => Boolean(ing.labels[lang]?.trim()));
 
   if (!q) return withLang.slice(0, limit);
 
   const scored = withLang
     .map((ing) => {
-      const label = getDisplayLabel(ing, lang);
-      const n = normalize(label);
+      const terms = suggestionTerms(ing, lang);
+      if (terms.length === 0) return { ing, score: 0 };
+
       let score = 0;
-      if (n.startsWith(q)) score = 100;
-      else if (n.includes(q)) score = 50;
-      else if (ing.id.includes(q.replace(/\s/g, '-'))) score = 40;
+      const full = terms[0];
+      if (full.startsWith(q)) score = 100;
+      else if (full.includes(q)) score = 50;
       else {
-        // Aliases only — do not match other UI languages (avoids cross-language duplicates in suggestions)
-        for (const alias of ing.aliases ?? []) {
-          const na = normalize(alias);
-          if (na.startsWith(q)) score = Math.max(score, 85);
-          else if (na.includes(q)) score = Math.max(score, 40);
+        for (const term of terms) {
+          if (term.startsWith(q)) score = Math.max(score, 80);
+          else if (term.includes(q)) score = Math.max(score, 35);
         }
       }
       return { ing, score };
@@ -113,8 +123,12 @@ export async function searchIngredients(
   return scored.slice(0, limit).map((x) => x.ing);
 }
 
+/** Label shown in the UI for the active language (no cross-language fallback for suggestions). */
 export function getDisplayLabel(ing: Ingredient, lang: UiLanguage): string {
-  return ing.labels[lang] ?? ing.labels.en ?? ing.id;
+  const primary = ing.labels[lang]?.trim();
+  if (primary) return primary;
+  // Custom / incomplete rows only
+  return ing.labels.en?.trim() || ing.id;
 }
 
 export function getAllTerms(ing: Ingredient): string[] {

@@ -213,6 +213,7 @@ export default function PreferencesScreen() {
 
       <Text style={styles.title}>{t(lang, 'preferencesTitle')}</Text>
       <IngredientSearch
+        key={lang}
         lang={lang}
         placeholder={t(lang, 'searchPlaceholder')}
         onSelect={addAvoid}
