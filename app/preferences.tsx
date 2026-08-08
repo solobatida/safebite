@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { IngredientSearch, AvoidList } from '@/components/IngredientSearch';
 import { ProfileSwitcher } from '@/components/ProfileSwitcher';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -157,9 +158,32 @@ export default function PreferencesScreen() {
 
   const activeName = profiles.find((p) => p.id === activeProfileId)?.displayName ?? '';
 
+  const goHome = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/scan');
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Stack.Screen options={{ title: t(lang, 'navPreferences') }} />
+      <Stack.Screen
+        options={{
+          title: t(lang, 'navPreferences'),
+          headerLeft: () => (
+            <Pressable
+              onPress={goHome}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t(lang, 'goToScan')}
+              style={styles.headerBack}
+            >
+              <Ionicons name="chevron-back" size={28} color="#fff" />
+            </Pressable>
+          ),
+        }}
+      />
       {isGuest ? (
         <Text style={styles.guestBanner}>{t(lang, 'guestBanner')}</Text>
       ) : null}
@@ -251,6 +275,11 @@ export default function PreferencesScreen() {
 
 const styles = StyleSheet.create({
   container: { padding: spacing.lg },
+  headerBack: {
+    paddingHorizontal: Platform.OS === 'web' ? 8 : 0,
+    marginLeft: Platform.OS === 'ios' ? 0 : 4,
+    justifyContent: 'center',
+  },
   title: {
     fontSize: 20,
     fontFamily: fonts.bold,
