@@ -8,8 +8,10 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import {
   getSession,
@@ -69,9 +71,32 @@ export default function AccountScreen() {
     }
   };
 
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/preferences');
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Stack.Screen options={{ title: t(lang, 'navAccount') }} />
+      <Stack.Screen
+        options={{
+          title: t(lang, 'navAccount'),
+          headerLeft: () => (
+            <Pressable
+              onPress={goBack}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t(lang, 'navPreferences')}
+              style={styles.headerBack}
+            >
+              <Ionicons name="chevron-back" size={28} color="#fff" />
+            </Pressable>
+          ),
+        }}
+      />
       <Text style={styles.title}>{t(lang, 'accountSettingsTitle')}</Text>
 
       {isGuest ? (
@@ -115,6 +140,11 @@ export default function AccountScreen() {
 
 const styles = StyleSheet.create({
   container: { padding: spacing.lg },
+  headerBack: {
+    paddingHorizontal: Platform.OS === 'web' ? 8 : 0,
+    marginLeft: Platform.OS === 'ios' ? 0 : 4,
+    justifyContent: 'center',
+  },
   title: {
     fontSize: 22,
     fontFamily: fonts.bold,
