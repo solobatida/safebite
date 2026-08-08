@@ -76,24 +76,33 @@ export function normalize(text: string): string {
     .trim();
 }
 
-export async function searchIngredients(query: string, limit = 12): Promise<Ingredient[]> {
+export async function searchIngredients(
+  query: string,
+  limit = 12,
+  lang: UiLanguage = 'en'
+): Promise<Ingredient[]> {
   const list = await loadIngredients();
   const q = normalize(query);
-  if (!q) return list.slice(0, limit);
 
-  const scored = list
+  // Only surface ingredients that have a label in the active UI language
+  const withLang = list.filter((ing) => Boolean(ing.labels[lang]?.trim() || ing.labels.en?.trim()));
+
+  if (!q) return withLang.slice(0, limit);
+
+  const scored = withLang
     .map((ing) => {
-      const label = getDisplayLabel(ing, 'en');
+      const label = getDisplayLabel(ing, lang);
       const n = normalize(label);
       let score = 0;
       if (n.startsWith(q)) score = 100;
       else if (n.includes(q)) score = 50;
       else if (ing.id.includes(q.replace(/\s/g, '-'))) score = 40;
       else {
-        for (const v of Object.values(ing.labels)) {
-          const nv = v ? normalize(v) : '';
-          if (nv.startsWith(q)) score = Math.max(score, 90);
-          else if (nv.includes(q)) score = Math.max(score, 45);
+        // Aliases only — do not match other UI languages (avoids cross-language duplicates in suggestions)
+        for (const alias of ing.aliases ?? []) {
+          const na = normalize(alias);
+          if (na.startsWith(q)) score = Math.max(score, 85);
+          else if (na.includes(q)) score = Math.max(score, 40);
         }
       }
       return { ing, score };

@@ -9,7 +9,8 @@ WebBrowser.maybeCompleteAuthSession();
 
 export function getAuthRedirectUrl(path = 'auth/callback'): string {
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return `${window.location.origin}/${path}`;
+    // Same origin as the tab (localhost vs 127.0.0.1) — must match Redirect URLs in Supabase
+    return `${window.location.origin}/${path.replace(/^\//, '')}`;
   }
   return Linking.createURL(path);
 }
@@ -23,7 +24,17 @@ function tokensFromUrl(url: string): {
   const query = parsed.queryParams ?? {};
   let access_token = typeof query.access_token === 'string' ? query.access_token : undefined;
   let refresh_token = typeof query.refresh_token === 'string' ? query.refresh_token : undefined;
-  const code = typeof query.code === 'string' ? query.code : undefined;
+  let code = typeof query.code === 'string' ? query.code : undefined;
+
+  // Also parse search with URL API (more reliable on web)
+  try {
+    const u = new URL(url);
+    access_token = access_token ?? u.searchParams.get('access_token') ?? undefined;
+    refresh_token = refresh_token ?? u.searchParams.get('refresh_token') ?? undefined;
+    code = code ?? u.searchParams.get('code') ?? undefined;
+  } catch {
+    /* ignore */
+  }
 
   if ((!access_token || !refresh_token) && url.includes('#')) {
     const hash = url.split('#')[1] ?? '';
@@ -35,14 +46,30 @@ function tokensFromUrl(url: string): {
   return { access_token, refresh_token, code };
 }
 
+async function waitForSupabaseSession(attempts = 8): Promise<boolean> {
+  if (!supabase) return false;
+  for (let i = 0; i < attempts; i++) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user) return true;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return false;
+}
+
 export async function establishSessionFromRedirectUrl(url: string): Promise<void> {
   if (!supabase) throw new Error('Supabase no está configurado.');
+
+  // detectSessionInUrl may already have exchanged the code
+  if (await waitForSupabaseSession(3)) return;
 
   const { access_token, refresh_token, code } = tokensFromUrl(url);
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) throw error;
+    if (error) {
+      if (await waitForSupabaseSession(5)) return;
+      throw error;
+    }
     return;
   }
 
@@ -52,7 +79,12 @@ export async function establishSessionFromRedirectUrl(url: string): Promise<void
     return;
   }
 
-  throw new Error('No se recibieron tokens de Google. Revisa Redirect URLs en Supabase.');
+  if (await waitForSupabaseSession(5)) return;
+
+  throw new Error(
+    'No se recibieron tokens de Google. En Supabase → Authentication → URL Configuration añade: ' +
+      `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8081'}/auth/callback`
+  );
 }
 
 export async function signInWithGoogle(): Promise<UserSession | null> {

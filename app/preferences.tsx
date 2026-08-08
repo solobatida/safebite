@@ -18,7 +18,7 @@ import { ProfileSwitcher } from '@/components/ProfileSwitcher';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { getSession, getAvoidList, setAvoidList, clearSession, getProfiles, isGuestSession } from '@/lib/storage';
 import { FEATURES } from '@/constants/features';
-import { loadIngredients, createCustomIngredient } from '@/lib/ingredients';
+import { loadIngredients, createCustomIngredient, normalize, getDisplayLabel, getAllTerms } from '@/lib/ingredients';
 import { t } from '@/i18n/translations';
 import type { FamilyProfile, Ingredient, UiLanguage } from '@/types';
 import { fonts } from '@/constants/fonts';
@@ -67,7 +67,10 @@ export default function PreferencesScreen() {
   );
 
   const addAvoid = async (ing: Ingredient) => {
-    if (avoidIds.includes(ing.id)) return;
+    if (avoidIds.includes(ing.id)) {
+      Alert.alert(t(lang, 'error'), t(lang, 'ingredientAlreadyAdded'));
+      return;
+    }
     const next = [...avoidIds, ing.id];
     setAvoidIds(next);
     try {
@@ -89,21 +92,56 @@ export default function PreferencesScreen() {
     }
   };
 
+  const isAlreadyAvoided = (name: string): boolean => {
+    const q = normalize(name);
+    if (!q) return false;
+    for (const id of avoidIds) {
+      const item = catalog.find((c) => c.id === id);
+      if (!item) {
+        const fromId = id.replace(/^custom-/, '').replace(/-/g, ' ');
+        if (normalize(fromId) === q) return true;
+        continue;
+      }
+      if (getAllTerms(item).includes(q)) return true;
+      if (normalize(getDisplayLabel(item, lang)) === q) return true;
+    }
+    return false;
+  };
+
   const saveCustom = async () => {
     const text = customName.trim();
     if (text.length < 2) {
       Alert.alert(t(lang, 'error'), t(lang, 'errorMinChars'));
       return;
     }
+    if (isAlreadyAvoided(text)) {
+      Alert.alert(t(lang, 'error'), t(lang, 'ingredientAlreadyAdded'));
+      return;
+    }
+
+    // If it already exists in the catalog, add that id instead of creating a duplicate custom
+    const existing = catalog.find((ing) => getAllTerms(ing).includes(normalize(text)));
+    if (existing) {
+      if (avoidIds.includes(existing.id)) {
+        Alert.alert(t(lang, 'error'), t(lang, 'ingredientAlreadyAdded'));
+        return;
+      }
+      await addAvoid(existing);
+      setCustomName('');
+      setCustomModal(false);
+      return;
+    }
 
     setSavingCustom(true);
     try {
       const entry = await createCustomIngredient(text);
-      if (!avoidIds.includes(entry.id)) {
-        const next = [...avoidIds, entry.id];
-        setAvoidIds(next);
-        await setAvoidList(next);
+      if (avoidIds.includes(entry.id)) {
+        Alert.alert(t(lang, 'error'), t(lang, 'ingredientAlreadyAdded'));
+        return;
       }
+      const next = [...avoidIds, entry.id];
+      setAvoidIds(next);
+      await setAvoidList(next);
       setCatalog(await loadIngredients());
       setCustomName('');
       setCustomModal(false);
@@ -143,20 +181,29 @@ export default function PreferencesScreen() {
         </Text>
       ) : null}
 
+      <PrimaryButton
+        label={t(lang, 'goToScan')}
+        onPress={() => router.push('/scan')}
+        style={{ marginTop: spacing.md }}
+      />
+
       <Text style={styles.title}>{t(lang, 'preferencesTitle')}</Text>
       <IngredientSearch
         lang={lang}
         placeholder={t(lang, 'searchPlaceholder')}
         onSelect={addAvoid}
+        excludeIds={avoidIds}
       />
       <Text style={styles.listTitle}>{t(lang, 'myAvoidList')}</Text>
       <AvoidList ids={avoidIds} lang={lang} catalog={catalog} onRemove={removeAvoid} />
-      <PrimaryButton
-        label={t(lang, 'addIngredient')}
-        variant="secondary"
-        onPress={() => setCustomModal(true)}
-        style={{ marginTop: spacing.sm }}
-      />
+      <View style={styles.addLinkWrap}>
+        <Text style={styles.addLinkText}>
+          {t(lang, 'addIngredientLink')}
+          <Text style={styles.addLink} onPress={() => setCustomModal(true)}>
+            {t(lang, 'addIngredientLinkHere')}
+          </Text>
+        </Text>
+      </View>
       <Modal visible={customModal} transparent animationType="slide">
         <KeyboardAvoidingView
           style={styles.modalBackdrop}
@@ -190,18 +237,13 @@ export default function PreferencesScreen() {
         </KeyboardAvoidingView>
       </Modal>
       <PrimaryButton
-        label={t(lang, 'goToScan')}
-        onPress={() => router.push('/scan')}
-        style={{ marginTop: spacing.md }}
-      />
-      <PrimaryButton
         label={isGuest ? t(lang, 'guestSignOut') : t(lang, 'signOut')}
         variant="danger"
         onPress={async () => {
           await clearSession();
           router.replace('/');
         }}
-        style={{ marginTop: spacing.sm, marginBottom: spacing.xl }}
+        style={{ marginTop: spacing.lg, marginBottom: spacing.xl }}
       />
     </ScrollView>
   );
@@ -212,7 +254,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontFamily: fonts.bold,
-    marginTop: spacing.md,
+    marginTop: spacing.xl,
     marginBottom: spacing.md,
     color: colors.text,
   },
@@ -231,7 +273,30 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
     marginBottom: spacing.md,
   },
-  listTitle: { fontFamily: fonts.semibold, marginTop: spacing.md, marginBottom: spacing.sm },
+  listTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 20,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    color: colors.text,
+  },
+  addLinkWrap: {
+    marginTop: spacing.md,
+    alignSelf: 'center',
+    paddingVertical: spacing.sm,
+  },
+  addLinkText: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  addLink: {
+    fontFamily: fonts.semibold,
+    fontSize: 14,
+    color: colors.primaryDark,
+    textDecorationLine: 'underline',
+  },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

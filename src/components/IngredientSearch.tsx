@@ -15,25 +15,31 @@ export function IngredientSearch({
   lang,
   onSelect,
   placeholder,
+  excludeIds = [],
 }: {
   lang: UiLanguage;
   onSelect: (ing: Ingredient) => void;
   placeholder: string;
+  /** Ingredient ids already on the avoid list — hidden from suggestions */
+  excludeIds?: string[];
 }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Ingredient[]>([]);
+  const excluded = new Set(excludeIds);
 
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const results = await searchIngredients(query);
-      if (!cancelled) setSuggestions(results);
+      const results = await searchIngredients(query, 12, lang);
+      if (!cancelled) {
+        setSuggestions(results.filter((ing) => !excluded.has(ing.id)));
+      }
     };
     run();
     return () => {
       cancelled = true;
     };
-  }, [query]);
+  }, [query, lang, excludeIds.join('|')]);
 
   return (
     <View>

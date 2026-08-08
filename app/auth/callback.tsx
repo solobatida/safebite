@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { establishSessionFromRedirectUrl } from '@/lib/auth';
 import { clearGuestSession, ensureCloudAccountSession } from '@/lib/storage';
+import { supabase } from '@/lib/supabase';
 import { fonts } from '@/constants/fonts';
 import { colors, spacing } from '@/constants/theme';
 
@@ -26,13 +27,29 @@ export default function AuthCallbackScreen() {
 
         if (url && (url.includes('code=') || url.includes('access_token='))) {
           await establishSessionFromRedirectUrl(url);
+        } else if (supabase) {
+          // detectSessionInUrl may have cleaned the query already
+          const { data } = await supabase.auth.getSession();
+          if (!data.session) {
+            throw new Error(
+              'No hay sesión tras Google Login. Revisa Redirect URLs en Supabase (localhost:8081/auth/callback).'
+            );
+          }
         }
 
         clearGuestSession();
         const session = await ensureCloudAccountSession();
         if (!session) {
-          throw new Error('No hay sesión tras Google Login. Revisa Redirect URLs en Supabase.');
+          throw new Error(
+            'No hay sesión tras Google Login. Revisa Redirect URLs en Supabase (localhost:8081/auth/callback).'
+          );
         }
+
+        // Clean OAuth params from the address bar on web
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.history.replaceState({}, '', '/preferences');
+        }
+
         if (!cancelled) router.replace('/preferences');
       } catch (e) {
         if (!cancelled) {

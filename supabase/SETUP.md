@@ -99,12 +99,19 @@ Al registrarse un usuario, el trigger `handle_new_user` crea filas en `profiles`
    - Credenciales → **OAuth client ID** tipo **Web**
 2. En Supabase → **Authentication** → **Providers** → **Google** → Enable  
    Pega el **Client ID** y **Client Secret** del cliente Web.
-3. **Authentication** → **URL Configuration** → Redirect URLs, añade:
-   - `safebite://auth/callback`
-   - `safebite://auth/reset`
-   - `http://localhost:8081/auth/callback` (pruebas en web)
-   - `http://localhost:8081/auth/reset`
-   - (Expo Go) la URL que te dé `Linking.createURL` / `exp://…` al probar
+3. **Authentication** → **URL Configuration**:
+   - **Site URL** (producción): `https://solobatida-safebite.expo.app` (o tu dominio)
+   - **Redirect URLs**, añade **todas** estas (si falta localhost, Google en local te devuelve al inicio sin sesión):
+     - `https://solobatida-safebite.expo.app/**`
+     - `https://solobatida-safebite.expo.app/auth/callback`
+     - `http://localhost:8081/**`
+     - `http://localhost:8081/auth/callback`
+     - `http://localhost:8081/auth/reset`
+     - `http://127.0.0.1:8081/**`
+     - `http://127.0.0.1:8081/auth/callback`
+     - `safebite://auth/callback`
+     - `safebite://auth/reset`
+   - Abre la app local siempre como `http://localhost:8081` (no mezcles con `127.0.0.1`)
 4. En SQL Editor ejecuta [`update-handle-new-user.sql`](./update-handle-new-user.sql) para nicknames de Google.
 
 ### Recuperar contraseña
