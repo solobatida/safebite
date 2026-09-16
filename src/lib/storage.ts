@@ -11,10 +11,56 @@ const KEYS = {
 
 let storageMigrated = false;
 
-/** In-memory guest session — not persisted to AsyncStorage */
+/** In-memory guest session — also mirrored to sessionStorage on web so refresh keeps the list */
 let guestSession: UserSession | null = null;
 let guestAvoidList: string[] = [];
 let guestCustomIngredients: Ingredient[] = [];
+
+const GUEST_AVOID_KEY = '@safebite/guest_avoid';
+const GUEST_SESSION_KEY = '@safebite/guest_session';
+
+function readGuestAvoidFromWeb(): string[] {
+  try {
+    if (typeof sessionStorage === 'undefined') return [];
+    const raw = sessionStorage.getItem(GUEST_AVOID_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeGuestAvoidToWeb(ids: string[]): void {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    sessionStorage.setItem(GUEST_AVOID_KEY, JSON.stringify(ids));
+  } catch {
+    // ignore
+  }
+}
+
+function readGuestSessionFromWeb(): UserSession | null {
+  try {
+    if (typeof sessionStorage === 'undefined') return null;
+    const raw = sessionStorage.getItem(GUEST_SESSION_KEY);
+    return raw ? (JSON.parse(raw) as UserSession) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeGuestSessionToWeb(session: UserSession | null): void {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    if (!session) {
+      sessionStorage.removeItem(GUEST_SESSION_KEY);
+      sessionStorage.removeItem(GUEST_AVOID_KEY);
+      return;
+    }
+    sessionStorage.setItem(GUEST_SESSION_KEY, JSON.stringify(session));
+  } catch {
+    // ignore
+  }
+}
 
 export function isGuestSession(session: UserSession | null): boolean {
   return Boolean(session?.isGuest);
@@ -32,6 +78,8 @@ export async function createGuestSession(uiLanguage: UiLanguage): Promise<UserSe
   };
   guestSession = session;
   guestAvoidList = [];
+  writeGuestSessionToWeb(session);
+  writeGuestAvoidToWeb([]);
   return session;
 }
 
@@ -39,6 +87,7 @@ export function clearGuestSession(): void {
   guestSession = null;
   guestAvoidList = [];
   guestCustomIngredients = [];
+  writeGuestSessionToWeb(null);
 }
 
 async function migrateLegacyStorageKeys(): Promise<void> {
@@ -66,6 +115,13 @@ interface LocalAccount {
 
 export async function getSession(): Promise<UserSession | null> {
   if (guestSession) return guestSession;
+
+  const webGuest = readGuestSessionFromWeb();
+  if (webGuest?.isGuest) {
+    guestSession = webGuest;
+    guestAvoidList = readGuestAvoidFromWeb();
+    return guestSession;
+  }
 
   await migrateLegacyStorageKeys();
 
@@ -573,6 +629,7 @@ export async function setAvoidList(ids: string[]): Promise<void> {
 
   if (session.isGuest) {
     guestAvoidList = [...ids];
+    writeGuestAvoidToWeb(ids);
     return;
   }
 

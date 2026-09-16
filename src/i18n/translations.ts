@@ -105,7 +105,10 @@ type Keys =
   | 'resultSafe'
   | 'resultNotSafe'
   | 'resultSafeDetail'
-  | 'resultNotSafeDetail';
+  | 'resultNotSafeDetail'
+  | 'resultNoAvoidList'
+  | 'resultNoIngredients'
+  | 'resultIngredientsLabel';
 
 const en: Record<Keys, string> = {
   slogan: 'Scan. Smile. Bite.',
@@ -214,6 +217,11 @@ const en: Record<Keys, string> = {
   resultNotSafe: 'NOT SAFE',
   resultSafeDetail: 'No matching allergens found in ingredients.',
   resultNotSafeDetail: 'Contains {count} of your allergens.',
+  resultNoAvoidList:
+    'Add ingredients to your avoid list before scanning. We cannot say SAFE with an empty list.',
+  resultNoIngredients:
+    'This product has no ingredients data in the database. Check the package label manually.',
+  resultIngredientsLabel: 'Ingredients analyzed:',
 };
 
 const es: Record<Keys, string> = {
@@ -322,6 +330,11 @@ const es: Record<Keys, string> = {
   resultNotSafe: 'NO APTO',
   resultSafeDetail: 'No se han encontrado alérgenos de tu lista en los ingredientes.',
   resultNotSafeDetail: 'Contiene {count} de tus alérgenos.',
+  resultNoAvoidList:
+    'Añade ingredientes a tu lista antes de escanear. No podemos marcar APTO con la lista vacía.',
+  resultNoIngredients:
+    'Este producto no tiene ingredientes en la base de datos. Revisa la etiqueta del envase.',
+  resultIngredientsLabel: 'Ingredientes analizados:',
 };
 
 const ca: Record<Keys, string> = {
@@ -424,6 +437,11 @@ const ca: Record<Keys, string> = {
   resultNotSafe: 'NO APTE',
   resultSafeDetail: 'No s\'han trobat al·lergògens de la teva llista als ingredients.',
   resultNotSafeDetail: 'Conté {count} dels teus al·lergògens.',
+  resultNoAvoidList:
+    'Afegeix ingredients a la llista abans d\'escanejar. No podem marcar APTE amb la llista buida.',
+  resultNoIngredients:
+    'Aquest producte no té ingredients a la base de dades. Revisa l\'etiqueta.',
+  resultIngredientsLabel: 'Ingredients analitzats:',
 };
 
 const it: Record<Keys, string> = {

@@ -9,13 +9,24 @@ const unsafeFace = require('../../assets/images/result-unsafe.png');
 const confetti = require('../../assets/images/result-confetti.png');
 
 export function ScanResultCard({ result, lang }: { result: ScanResult; lang: UiLanguage }) {
-  const ok = result.safe;
+  const inconclusive = Boolean(result.unknownReason);
+  const ok = result.safe && !inconclusive;
   const count = result.matched.length;
+  const ingredientsPreview = result.ingredientsText?.trim().slice(0, 220);
+
+  const detail = (() => {
+    if (result.unknownReason === 'no_avoid_list') return t(lang, 'resultNoAvoidList');
+    if (result.unknownReason === 'no_ingredients') return t(lang, 'resultNoIngredients');
+    if (ok) return t(lang, 'resultSafeDetail');
+    return t(lang, 'resultNotSafeDetail', { count: String(count) });
+  })();
 
   return (
     <View style={styles.card}>
       <View style={styles.hero}>
-        <Image source={confetti} style={styles.confetti} resizeMode="contain" />
+        {!inconclusive ? (
+          <Image source={confetti} style={styles.confetti} resizeMode="contain" />
+        ) : null}
         <Image
           source={ok ? safeFace : unsafeFace}
           style={styles.face}
@@ -24,15 +35,16 @@ export function ScanResultCard({ result, lang }: { result: ScanResult; lang: UiL
       </View>
 
       <Text style={styles.productName}>{result.productName}</Text>
-      <Text style={styles.productIs}>{t(lang, 'resultProductIs')}</Text>
-      <Text style={[styles.verdict, ok ? styles.safeText : styles.dangerText]}>
-        {ok ? t(lang, 'resultSafe') : t(lang, 'resultNotSafe')}
+      {!inconclusive ? <Text style={styles.productIs}>{t(lang, 'resultProductIs')}</Text> : null}
+      <Text
+        style={[
+          styles.verdict,
+          ok ? styles.safeText : inconclusive ? styles.warnText : styles.dangerText,
+        ]}
+      >
+        {inconclusive ? '?' : ok ? t(lang, 'resultSafe') : t(lang, 'resultNotSafe')}
       </Text>
-      <Text style={styles.detail}>
-        {ok
-          ? t(lang, 'resultSafeDetail')
-          : t(lang, 'resultNotSafeDetail', { count: String(count) })}
-      </Text>
+      <Text style={styles.detail}>{detail}</Text>
 
       {!ok && result.matched.length > 0 && (
         <View style={styles.matchedBox}>
@@ -43,6 +55,16 @@ export function ScanResultCard({ result, lang }: { result: ScanResult; lang: UiL
           ))}
         </View>
       )}
+
+      {ingredientsPreview ? (
+        <View style={styles.ingredientsBox}>
+          <Text style={styles.ingredientsLabel}>{t(lang, 'resultIngredientsLabel')}</Text>
+          <Text style={styles.ingredientsText}>
+            {ingredientsPreview}
+            {result.ingredientsText.trim().length > 220 ? '…' : ''}
+          </Text>
+        </View>
+      ) : null}
 
       <Text style={styles.disclaimer}>{t(lang, 'disclaimer')}</Text>
     </View>
@@ -104,6 +126,7 @@ const styles = StyleSheet.create({
   },
   safeText: { color: '#1FA855' },
   dangerText: { color: '#E53935' },
+  warnText: { color: '#C47F00' },
   detail: {
     fontSize: 14,
     fontFamily: fonts.regular,
@@ -128,6 +151,25 @@ const styles = StyleSheet.create({
     color: colors.danger,
     textAlign: 'center',
     marginBottom: 6,
+  },
+  ingredientsBox: {
+    marginTop: spacing.md,
+    width: '100%',
+    backgroundColor: '#F4F7F5',
+    borderRadius: 12,
+    padding: spacing.md,
+  },
+  ingredientsLabel: {
+    fontSize: 12,
+    fontFamily: fonts.semibold,
+    color: colors.textMuted,
+    marginBottom: 4,
+  },
+  ingredientsText: {
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    color: colors.text,
+    lineHeight: 17,
   },
   disclaimer: {
     fontSize: 11,

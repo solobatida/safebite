@@ -60,6 +60,10 @@ export interface ScanResult {
   safe: boolean;
   matched: MatchedIngredient[];
   unknown?: string[];
+  /** Why we could not confidently say SAFE */
+  unknownReason?: 'no_avoid_list' | 'no_ingredients';
+  /** How many avoid-list items were checked */
+  avoidCount?: number;
 }
 
 export interface MatchedIngredient {

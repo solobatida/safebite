@@ -159,7 +159,23 @@ export async function matchAvoidList(
 
   // Direct map from Open Food Facts allergen tags → catalog ids
   for (const tag of extra.allergenTags ?? []) {
-    const id = OFF_ALLERGEN_TO_ID[tag.toLowerCase()];
+    const id = OFF_ALLERGEN_TO_ID[tag.toLowerCase()] ?? inferAllergenIdFromTag(tag);
+    if (id && avoidSet.has(id) && !matchedIds.has(id)) {
+      const ing = list.find((x) => x.id === id);
+      if (ing) {
+        matched.push({
+          id,
+          label: getDisplayLabel(ing, uiLang),
+          matchedTerm: tag,
+        });
+        matchedIds.add(id);
+      }
+    }
+  }
+
+  // Ingredient tags often embed allergen words (e.g. "en:pasteurised cow's milk …")
+  for (const tag of extra.ingredientTags ?? []) {
+    const id = inferAllergenIdFromTag(tag);
     if (id && avoidSet.has(id) && !matchedIds.has(id)) {
       const ing = list.find((x) => x.id === id);
       if (ing) {
@@ -227,6 +243,24 @@ const OFF_ALLERGEN_TO_ID: Record<string, string> = {
   'en:crustaceans': 'shrimp',
   'en:molluscs': 'shrimp',
 };
+
+/** Infer catalog id from free-form OFF tags / allergen strings. */
+function inferAllergenIdFromTag(tag: string): string | null {
+  const n = normalize(tag);
+  if (!n) return null;
+  if (/\b(milk|leche|lait|milch|latte|leite|dairy|lactose|lactos|lacteos|lactea|whey|casein)\b/.test(n)) {
+    return 'milk';
+  }
+  if (/\b(egg|eggs|huevo|uovo|oeuf|ei)\b/.test(n)) return 'egg';
+  if (/\b(peanut|cacahuete|cacahuetes|arachide|erdnuss)\b/.test(n)) return 'peanut';
+  if (/\b(soy|soja|soya)\b/.test(n)) return 'soy';
+  if (/\b(gluten|wheat|trigo|blé|weizen)\b/.test(n)) return 'wheat';
+  if (/\b(sesame|sesamo|sésamo)\b/.test(n)) return 'sesame';
+  if (/\b(mustard|mostaza|moutarde|senf)\b/.test(n)) return 'mustard';
+  if (/\b(celery|apio|céleri|sellerie)\b/.test(n)) return 'celery';
+  if (/\b(fish|pescado|poisson|fisch|pesce)\b/.test(n)) return 'fish';
+  return null;
+}
 
 function containsTerm(haystack: string, term: string): boolean {
   if (!term || !haystack) return false;

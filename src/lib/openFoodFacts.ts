@@ -32,23 +32,24 @@ export async function fetchProductByBarcode(barcode: string): Promise<ProductLoo
     p.brands ||
     'Unknown product';
 
-  const ingredientsText =
-    p.ingredients_text ||
-    p.ingredients_text_ca ||
-    p.ingredients_text_es ||
-    p.ingredients_text_en ||
-    p.ingredients_text_fr ||
-    p.ingredients_text_de ||
-    p.ingredients_text_it ||
-    Object.entries(p)
-      .filter(([k]) => k.startsWith('ingredients_text'))
-      .map(([, v]) => (typeof v === 'string' ? v : ''))
-      .find((v) => v.length > 10) ||
+  // Merge every language ingredients field so "leche" / "milk" both match
+  const langTexts = Object.entries(p as Record<string, unknown>)
+    .filter(([k, v]) => k.startsWith('ingredients_text') && typeof v === 'string' && (v as string).trim().length > 2)
+    .map(([, v]) => String(v).trim());
+  const primary =
+    (typeof p.ingredients_text === 'string' && p.ingredients_text.trim()) ||
+    (typeof p.ingredients_text_es === 'string' && p.ingredients_text_es.trim()) ||
+    (typeof p.ingredients_text_en === 'string' && p.ingredients_text_en.trim()) ||
+    langTexts[0] ||
     '';
+  const ingredientsText = [...new Set([primary, ...langTexts].filter(Boolean))].join('\n');
 
   const allergenTags = [
     ...(Array.isArray(p.allergens_tags) ? p.allergens_tags : []),
     ...(Array.isArray(p.allergens_hierarchy) ? p.allergens_hierarchy : []),
+    ...(typeof p.allergens === 'string'
+      ? p.allergens.split(/,|;/).map((s: string) => s.trim()).filter(Boolean)
+      : []),
   ]
     .filter((t): t is string => typeof t === 'string' && t.length > 0)
     .map((t) => t.toLowerCase());
@@ -63,7 +64,7 @@ export async function fetchProductByBarcode(barcode: string): Promise<ProductLoo
   return {
     found: true,
     name: String(name),
-    ingredientsText: [String(ingredientsText), allergensFromIngredients].filter(Boolean).join('\n'),
+    ingredientsText: [ingredientsText, allergensFromIngredients].filter(Boolean).join('\n'),
     allergenTags: [...new Set(allergenTags)],
     ingredientTags,
   };
