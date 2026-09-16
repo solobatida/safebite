@@ -46,9 +46,25 @@ export async function fetchProductByBarcode(barcode: string): Promise<ProductLoo
       .find((v) => v.length > 10) ||
     '';
 
+  const allergenTags = [
+    ...(Array.isArray(p.allergens_tags) ? p.allergens_tags : []),
+    ...(Array.isArray(p.allergens_hierarchy) ? p.allergens_hierarchy : []),
+  ]
+    .filter((t): t is string => typeof t === 'string' && t.length > 0)
+    .map((t) => t.toLowerCase());
+
+  const ingredientTags = (Array.isArray(p.ingredients_tags) ? p.ingredients_tags : [])
+    .filter((t): t is string => typeof t === 'string' && t.length > 0)
+    .map((t) => t.toLowerCase());
+
+  const allergensFromIngredients =
+    typeof p.allergens_from_ingredients === 'string' ? p.allergens_from_ingredients : '';
+
   return {
     found: true,
     name: String(name),
-    ingredientsText: String(ingredientsText),
+    ingredientsText: [String(ingredientsText), allergensFromIngredients].filter(Boolean).join('\n'),
+    allergenTags: [...new Set(allergenTags)],
+    ingredientTags,
   };
 }

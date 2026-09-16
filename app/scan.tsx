@@ -55,7 +55,10 @@ export default function ScanScreen() {
       setLoading(true);
       setScanning(false);
       try {
-        const res = await checkBarcode(code, avoidIds, lang);
+        // Always reload avoid list at scan time (avoids empty/stale state)
+        const freshAvoid = await getAvoidList();
+        setAvoidIds(freshAvoid);
+        const res = await checkBarcode(code, freshAvoid, lang);
         if (!res) {
           Alert.alert('SafeBite', t(lang, 'productNotFound'));
           setScanning(true);
@@ -77,7 +80,7 @@ export default function ScanScreen() {
         setLoading(false);
       }
     },
-    [avoidIds, lang, lastCode, loading, router]
+    [lang, lastCode, loading, router]
   );
 
   const isWeb = Platform.OS === 'web';

@@ -13,7 +13,11 @@ export async function checkBarcode(
   const { safe, matched, unknown } = await matchAvoidList(
     product.ingredientsText,
     avoidIds,
-    uiLang
+    uiLang,
+    {
+      allergenTags: product.allergenTags,
+      ingredientTags: product.ingredientTags,
+    }
   );
 
   return {

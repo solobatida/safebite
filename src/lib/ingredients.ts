@@ -145,15 +145,36 @@ export function getAllTerms(ing: Ingredient): string[] {
 export async function matchAvoidList(
   ingredientsText: string,
   avoidIds: string[],
-  uiLang: UiLanguage
+  uiLang: UiLanguage,
+  extra: { allergenTags?: string[]; ingredientTags?: string[] } = {}
 ): Promise<{ safe: boolean; matched: MatchedIngredient[]; unknown: string[] }> {
   const list = await loadIngredients();
   const avoidSet = new Set(avoidIds);
-  const haystack = normalize(ingredientsText);
+  const tagHaystack = normalize(
+    [...(extra.allergenTags ?? []), ...(extra.ingredientTags ?? [])].join(' ')
+  );
+  const haystack = normalize([ingredientsText, tagHaystack].filter(Boolean).join(' '));
   const matched: MatchedIngredient[] = [];
+  const matchedIds = new Set<string>();
+
+  // Direct map from Open Food Facts allergen tags → catalog ids
+  for (const tag of extra.allergenTags ?? []) {
+    const id = OFF_ALLERGEN_TO_ID[tag.toLowerCase()];
+    if (id && avoidSet.has(id) && !matchedIds.has(id)) {
+      const ing = list.find((x) => x.id === id);
+      if (ing) {
+        matched.push({
+          id,
+          label: getDisplayLabel(ing, uiLang),
+          matchedTerm: tag,
+        });
+        matchedIds.add(id);
+      }
+    }
+  }
 
   for (const ing of list) {
-    if (!avoidSet.has(ing.id)) continue;
+    if (!avoidSet.has(ing.id) || matchedIds.has(ing.id)) continue;
     for (const term of getAllTerms(ing)) {
       if (term.length < 3) continue;
       if (containsTerm(haystack, term)) {
@@ -162,6 +183,7 @@ export async function matchAvoidList(
           label: getDisplayLabel(ing, uiLang),
           matchedTerm: term,
         });
+        matchedIds.add(ing.id);
         break;
       }
     }
@@ -171,10 +193,47 @@ export async function matchAvoidList(
   return { safe: matched.length === 0, matched, unknown };
 }
 
+/** Open Food Facts allergen taxonomy → SafeBite ingredient ids */
+const OFF_ALLERGEN_TO_ID: Record<string, string> = {
+  'en:milk': 'milk',
+  'en:dairy': 'milk',
+  'en:lactose': 'lactose',
+  'en:eggs': 'egg',
+  'en:egg': 'egg',
+  'en:gluten': 'wheat',
+  'en:wheat': 'wheat',
+  'en:peanuts': 'peanut',
+  'en:peanut': 'peanut',
+  'en:nuts': 'tree-nuts',
+  'en:tree-nuts': 'tree-nuts',
+  'en:almonds': 'almond',
+  'en:hazelnuts': 'hazelnut',
+  'en:walnuts': 'walnut',
+  'en:cashew-nuts': 'cashew',
+  'en:pistachio-nuts': 'pistachio',
+  'en:macadamia-nuts': 'macadamia',
+  'en:brazil-nuts': 'brazil-nut',
+  'en:pecan-nuts': 'pecan',
+  'en:soybeans': 'soy',
+  'en:soy': 'soy',
+  'en:celery': 'celery',
+  'en:mustard': 'mustard',
+  'en:sesame-seeds': 'sesame',
+  'en:sesame': 'sesame',
+  'en:sulphur-dioxide-and-sulphites': 'sulphites',
+  'en:sulfites': 'sulphites',
+  'en:lupin': 'lupin',
+  'en:fish': 'fish',
+  'en:crustaceans': 'shrimp',
+  'en:molluscs': 'shrimp',
+};
+
 function containsTerm(haystack: string, term: string): boolean {
+  if (!term || !haystack) return false;
+  if (haystack.includes(term)) return true;
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`(^|[\\s,;(])${escaped}([\\s,;.)]|$)`, 'iu');
-  return re.test(haystack) || haystack.includes(term);
+  const re = new RegExp(`(^|[\\s,;(/])${escaped}([\\s,;.)/]|$)`, 'iu');
+  return re.test(haystack);
 }
 
 function findUnknownTokens(text: string, catalog: Ingredient[]): string[] {

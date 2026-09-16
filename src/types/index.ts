@@ -72,4 +72,8 @@ export interface ProductLookup {
   found: boolean;
   name: string;
   ingredientsText: string;
+  /** Open Food Facts allergen tags e.g. en:milk */
+  allergenTags?: string[];
+  /** Open Food Facts ingredient tags (may include long free-text tags) */
+  ingredientTags?: string[];
 }
