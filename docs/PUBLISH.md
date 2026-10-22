@@ -1,4 +1,4 @@
-# Publicar SafeBite (checklist)
+# Publicar Come Tranki (checklist)
 
 Pasos para poner la app en **Google Play** y **App Store** a **0,99 €**.
 

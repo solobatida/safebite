@@ -209,7 +209,7 @@ export async function matchAvoidList(
   return { safe: matched.length === 0, matched, unknown };
 }
 
-/** Open Food Facts allergen taxonomy → SafeBite ingredient ids */
+/** Open Food Facts allergen taxonomy → catalog ingredient ids */
 const OFF_ALLERGEN_TO_ID: Record<string, string> = {
   'en:milk': 'milk',
   'en:dairy': 'milk',

@@ -81,7 +81,7 @@ export async function fetchProductByBarcode(barcode: string): Promise<ProductLoo
   for (const code of barcodeCandidates(barcode)) {
     try {
       const res = await fetch(`${BASE}/${code}.json`, {
-        headers: { 'User-Agent': 'SafeBite/1.0 (intolerance checker)' },
+        headers: { 'User-Agent': 'ComeTranki/1.0 (intolerance checker)' },
       });
       if (!res.ok) continue;
 

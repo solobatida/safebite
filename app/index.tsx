@@ -7,6 +7,7 @@ import { getSession, isGuestSession } from '@/lib/storage';
 import { t } from '@/i18n/translations';
 import { fonts } from '@/constants/fonts';
 import { colors, spacing } from '@/constants/theme';
+import { APP_NAME } from '@/constants/brand';
 import type { UiLanguage } from '@/types';
 
 const welcomeLogo = require('../assets/images/welcome-logo.png');
@@ -33,11 +34,11 @@ export default function WelcomeScreen() {
         <Image
           source={welcomeLogo}
           style={styles.logo}
-          accessibilityLabel="SafeBite"
+          accessibilityLabel={APP_NAME}
         />
       }
     >
-      <Text style={styles.title}>SafeBite</Text>
+      <Text style={styles.title}>{APP_NAME}</Text>
       <Text style={styles.slogan}>{t(lang, 'slogan')}</Text>
       <Text style={styles.sub}>{t(lang, 'welcomeSub')}</Text>
       <View style={styles.actions}>

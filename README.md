@@ -1,4 +1,4 @@
-# SafeBite
+# Come Tranki
 
 Mobile app to scan supermarket barcodes and check whether a product is safe for **your** intolerances and allergies. Ingredient names are matched across **English, French, German, Spanish, Italian, Portuguese, Russian, and Arabic**.
 

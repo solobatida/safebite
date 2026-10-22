@@ -127,7 +127,7 @@ export async function signInWithGoogle(): Promise<UserSession | null> {
   await establishSessionFromRedirectUrl(result.url);
   clearGuestSession();
   const session = await ensureCloudAccountSession();
-  if (!session) throw new Error('No se pudo crear la sesión de SafeBite.');
+  if (!session) throw new Error('No se pudo crear la sesión de Come Tranki.');
   return session;
 }
 

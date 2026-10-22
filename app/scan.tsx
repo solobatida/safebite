@@ -21,6 +21,7 @@ import type { ScanResult, UiLanguage } from '@/types';
 import { colors, spacing } from '@/constants/theme';
 import { FEATURES } from '@/constants/features';
 import { fonts } from '@/constants/fonts';
+import { APP_NAME } from '@/constants/brand';
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -62,7 +63,7 @@ export default function ScanScreen() {
         setAvoidIds(freshAvoid);
         const res = await checkBarcode(code, freshAvoid, lang);
         if (!res) {
-          Alert.alert('SafeBite', t(lang, 'productNotFound'));
+          Alert.alert(APP_NAME, t(lang, 'productNotFound'));
           setScanning(true);
           setLastCode('');
           return;

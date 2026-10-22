@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "SafeBite",
+    "name": "Come Tranki",
     "slug": "safebite",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,7 +11,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.safebite.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "SafeBite uses the camera to scan product barcodes in the supermarket.",
+        "NSCameraUsageDescription": "Come Tranki uses the camera to scan product barcodes in the supermarket.",
         "NSPhotoLibraryUsageDescription": "Optional: save product scan history.",
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -42,7 +42,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow SafeBite to scan barcodes on food packages."
+          "cameraPermission": "Allow Come Tranki to scan barcodes on food packages."
         }
       ],
       "expo-web-browser"

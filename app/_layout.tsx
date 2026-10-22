@@ -6,6 +6,7 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { fontAssets, fonts } from '@/constants/fonts';
 import { colors } from '@/constants/theme';
+import { APP_NAME } from '@/constants/brand';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { clearGuestSession, ensureCloudAccountSession } from '@/lib/storage';
 
@@ -83,7 +84,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ title: 'SafeBite', headerStyle: { backgroundColor: colors.primaryDark } }} />
+        <Stack.Screen name="login" options={{ title: APP_NAME, headerStyle: { backgroundColor: colors.primaryDark } }} />
         <Stack.Screen name="language" options={{ title: 'Language' }} />
         <Stack.Screen name="preferences" options={{ title: 'Preferences' }} />
         <Stack.Screen name="account" options={{ title: 'Account' }} />

@@ -1,8 +1,8 @@
-# SafeBite — Product Specification
+# Come Tranki — Product Specification
 
 ## 1. Vision
 
-**SafeBite** helps people with food intolerances, allergies, or dietary preferences scan supermarket products by barcode and instantly see whether the product is safe for them. Ingredient lists are often in French, German, or other languages; SafeBite matches ingredients against a multilingual database and the user’s personal avoid-list.
+**Come Tranki** helps people with food intolerances, allergies, or dietary preferences scan supermarket products by barcode and instantly see whether the product is safe for them. Ingredient lists are often in French, German, or other languages; Come Tranki matches ingredients against a multilingual database and the user’s personal avoid-list.
 
 **Slogan (examples):** *“Scan. Know. Eat safe.”* / *“Your pocket ingredient translator.”*
 
@@ -239,12 +239,12 @@ scan_history (optional v2) (
 
 Display on scan result:
 
-> *SafeBite provides informational suggestions based on barcode databases and your settings. Always read the physical package and consult a healthcare professional for allergies.*
+> *Come Tranki provides informational suggestions based on barcode databases and your settings. Always read the physical package and consult a healthcare professional for allergies.*
 
 ---
 
 ## 10. Branding (Welcome screen)
 
 - Background: supermarket shelf gradient (warm lights, product silhouettes).
-- Foreground: comic “boom” burst with **SafeBite** wordmark.
+- Foreground: comic “boom” burst with **Come Tranki** wordmark.
 - Primary CTA: green **Enter** button; secondary: **Login**.
