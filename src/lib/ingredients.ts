@@ -76,15 +76,22 @@ export function normalize(text: string): string {
     .trim();
 }
 
-/** Terms used only for suggestion search — active UI language label, never other languages. */
+/** Terms for suggestion search: active language label + aliases (not other UI languages). */
 function suggestionTerms(ing: Ingredient, lang: UiLanguage): string[] {
   const label = ing.labels[lang]?.trim();
   if (!label) return [];
-  const terms = [normalize(label)];
+  const terms = new Set<string>([normalize(label)]);
   for (const word of normalize(label).split(' ')) {
-    if (word.length >= 2) terms.push(word);
+    if (word.length >= 2) terms.add(word);
   }
-  return terms;
+  for (const alias of ing.aliases ?? []) {
+    const na = normalize(alias);
+    if (na.length >= 2) terms.add(na);
+    for (const word of na.split(' ')) {
+      if (word.length >= 2) terms.add(word);
+    }
+  }
+  return [...terms];
 }
 
 export async function searchIngredients(
