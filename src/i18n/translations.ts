@@ -56,6 +56,7 @@ type Keys =
   | 'forgotPassword'
   | 'resendConfirmation'
   | 'goToScan'
+  | 'add'
   | 'addIngredient'
   | 'addIngredientLink'
   | 'addIngredientLinkHere'
@@ -171,6 +172,7 @@ const en: Record<Keys, string> = {
   forgotPassword: 'Forgot password?',
   resendConfirmation: 'Resend confirmation email',
   goToScan: 'Go to scan',
+  add: 'Add',
   addIngredient: 'Add ingredient',
   addIngredientLink: "Can't find an ingredient? Add it ",
   addIngredientLinkHere: 'here',
@@ -289,6 +291,7 @@ const es: Record<Keys, string> = {
   forgotPassword: '¿Olvidaste la contraseña?',
   resendConfirmation: 'Reenviar email de confirmación',
   goToScan: 'Ir a escanear',
+  add: 'Añadir',
   addIngredient: 'Añadir ingrediente',
   addIngredientLink: '¿No encuentras un ingrediente? Añádelo ',
   addIngredientLinkHere: 'aquí',
@@ -407,6 +410,7 @@ const ca: Record<Keys, string> = {
   forgotPassword: 'Has oblidat la contrasenya?',
   resendConfirmation: 'Torna a enviar el correu de confirmació',
   goToScan: 'Vés a escanejar',
+  add: 'Afegeix',
   addIngredient: 'Afegeix ingredient',
   addIngredientLink: 'No trobes un ingredient? Afegeix-lo ',
   addIngredientLinkHere: 'aquí',

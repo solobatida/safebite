@@ -10,6 +10,7 @@ import { searchIngredients, getDisplayLabel } from '@/lib/ingredients';
 import { t } from '@/i18n/translations';
 import type { Ingredient, UiLanguage } from '@/types';
 import { colors, spacing } from '@/constants/theme';
+import { fonts } from '@/constants/fonts';
 
 export function IngredientSearch({
   lang,
@@ -46,28 +47,51 @@ export function IngredientSearch({
     };
   }, [query, lang, excludeIds.join('|')]);
 
+  const pick = (ing: Ingredient) => {
+    onSelect(ing);
+    setQuery('');
+    setSuggestions([]);
+  };
+
+  const addFromQuery = () => {
+    if (suggestions.length > 0) {
+      pick(suggestions[0]);
+      return;
+    }
+  };
+
   return (
     <View key={lang}>
-      <TextInput
-        style={styles.input}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        value={query}
-        onChangeText={setQuery}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
+      <View style={styles.row}>
+        <TextInput
+          style={styles.input}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="done"
+          onSubmitEditing={addFromQuery}
+          blurOnSubmit={false}
+        />
+        <Pressable
+          style={[styles.addBtn, query.trim().length === 0 && styles.addBtnDisabled]}
+          disabled={query.trim().length === 0 || suggestions.length === 0}
+          onPress={addFromQuery}
+          accessibilityRole="button"
+          accessibilityLabel={t(lang, 'addIngredient')}
+        >
+          <Text style={styles.addBtnText}>{t(lang, 'add')}</Text>
+        </Pressable>
+      </View>
       {query.length > 0 && suggestions.length > 0 && (
         <View style={styles.dropdown}>
           {suggestions.map((item) => (
             <Pressable
               key={`${lang}-${item.id}`}
               style={styles.suggestion}
-              onPress={() => {
-                onSelect(item);
-                setQuery('');
-                setSuggestions([]);
-              }}
+              onPress={() => pick(item)}
             >
               <Text style={styles.suggestionText}>{getDisplayLabel(item, lang)}</Text>
               <Text style={styles.category}>{item.category}</Text>
@@ -75,6 +99,9 @@ export function IngredientSearch({
           ))}
         </View>
       )}
+      {query.trim().length >= 2 && suggestions.length === 0 ? (
+        <Text style={styles.noMatch}>{t(lang, 'addIngredientLink')}</Text>
+      ) : null}
     </View>
   );
 }
@@ -113,7 +140,13 @@ export function AvoidList({
 }
 
 const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+  },
   input: {
+    flex: 1,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
@@ -121,6 +154,22 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     fontSize: 16,
     color: colors.text,
+  },
+  addBtn: {
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    maxWidth: 120,
+  },
+  addBtnDisabled: {
+    opacity: 0.45,
+  },
+  addBtnText: {
+    color: colors.white,
+    fontFamily: fonts.semibold,
+    fontSize: 14,
+    textAlign: 'center',
   },
   dropdown: {
     backgroundColor: colors.white,
@@ -138,6 +187,12 @@ const styles = StyleSheet.create({
   },
   suggestionText: { fontSize: 16, color: colors.text, fontWeight: '600' },
   category: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  noMatch: {
+    marginTop: spacing.sm,
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+  },
   list: { marginTop: spacing.md },
   empty: { color: colors.textMuted, fontStyle: 'italic', marginTop: spacing.md },
   chip: {
