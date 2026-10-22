@@ -13,10 +13,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { IngredientSearch, AvoidList } from '@/components/IngredientSearch';
 import { ProfileSwitcher } from '@/components/ProfileSwitcher';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { getSession, getAvoidList, setAvoidList, clearSession, getProfiles, isGuestSession } from '@/lib/storage';
 import { FEATURES } from '@/constants/features';
 import { loadIngredients, createCustomIngredient, normalize, getDisplayLabel, getAllTerms } from '@/lib/ingredients';
@@ -158,7 +158,7 @@ export default function PreferencesScreen() {
 
   const activeName = profiles.find((p) => p.id === activeProfileId)?.displayName ?? '';
 
-  const goHome = () => {
+  const goBack = () => {
     if (router.canGoBack()) {
       router.back();
       return;
@@ -172,15 +172,7 @@ export default function PreferencesScreen() {
         options={{
           title: t(lang, 'navPreferences'),
           headerLeft: () => (
-            <Pressable
-              onPress={goHome}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel={t(lang, 'goToScan')}
-              style={styles.headerBack}
-            >
-              <Ionicons name="chevron-back" size={28} color="#fff" />
-            </Pressable>
+            <HeaderBackButton onPress={goBack} accessibilityLabel={t(lang, 'goToScan')} />
           ),
         }}
       />
@@ -276,11 +268,6 @@ export default function PreferencesScreen() {
 
 const styles = StyleSheet.create({
   container: { padding: spacing.lg },
-  headerBack: {
-    paddingHorizontal: Platform.OS === 'web' ? 8 : 0,
-    marginLeft: Platform.OS === 'ios' ? 0 : 4,
-    justifyContent: 'center',
-  },
   title: {
     fontSize: 20,
     fontFamily: fonts.bold,

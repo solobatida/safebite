@@ -14,6 +14,7 @@ import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { ScanResultCard } from '@/components/ScanResultCard';
 import { WebBarcodeScanner } from '@/components/WebBarcodeScanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { getSession, getAvoidList } from '@/lib/storage';
 import { checkBarcode, checkIngredientsText } from '@/lib/productCheck';
 import { t } from '@/i18n/translations';
@@ -110,10 +111,29 @@ export default function ScanScreen() {
   const canUseNativeCamera = !isWeb && permission?.granted;
   const showManualIngredients = Boolean(result?.needsManualIngredients);
 
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace('/preferences');
+  };
+
+  const scanHeader = (
+    <Stack.Screen
+      options={{
+        title: t(lang, 'navScan'),
+        headerLeft: () => (
+          <HeaderBackButton onPress={goBack} accessibilityLabel={t(lang, 'navPreferences')} />
+        ),
+      }}
+    />
+  );
+
   if (!isWeb && !permission?.granted) {
     return (
       <View style={styles.center}>
-        <Stack.Screen options={{ title: t(lang, 'navScan') }} />
+        {scanHeader}
         <Text style={styles.hint}>{t(lang, 'cameraPermission')}</Text>
         <PrimaryButton label={t(lang, 'allowCamera')} onPress={requestPermission} />
       </View>
@@ -126,7 +146,7 @@ export default function ScanScreen() {
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
     >
-      <Stack.Screen options={{ title: t(lang, 'navScan') }} />
+      {scanHeader}
       {FEATURES.familyProfiles && profileName ? (
         <Text style={styles.profileBanner}>{t(lang, 'scanForProfile', { name: profileName })}</Text>
       ) : null}
