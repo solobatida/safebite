@@ -9,37 +9,36 @@ export const DEMO_BARCODES = {
   water: '8000500310427',
 };
 
-export async function fetchProductByBarcode(barcode: string): Promise<ProductLookup> {
-  const code = barcode.replace(/\D/g, '');
-  const res = await fetch(`${BASE}/${code}.json`, {
-    headers: { 'User-Agent': 'SafeBite/1.0 (intolerance checker)' },
-  });
+function barcodeCandidates(raw: string): string[] {
+  const code = raw.replace(/\D/g, '');
+  if (!code) return [];
+  const out = new Set<string>([code]);
+  // EAN-13 often stored with leading zero when scanned as 12 digits
+  if (code.length === 12) out.add(`0${code}`);
+  if (code.length === 13 && code.startsWith('0')) out.add(code.slice(1));
+  return [...out];
+}
 
-  if (!res.ok) {
-    return { found: false, name: '', ingredientsText: '' };
-  }
-
-  const data = await res.json();
-  const p = data?.product;
-  if (!p || data.status !== 1) {
-    return { found: false, name: '', ingredientsText: '' };
-  }
-
+function parseProduct(p: Record<string, unknown>, fallbackName: string): ProductLookup {
   const name =
-    p.product_name ||
-    p.product_name_en ||
-    p.generic_name ||
-    p.brands ||
-    'Unknown product';
+    (typeof p.product_name === 'string' && p.product_name) ||
+    (typeof p.product_name_es === 'string' && p.product_name_es) ||
+    (typeof p.product_name_en === 'string' && p.product_name_en) ||
+    (typeof p.generic_name === 'string' && p.generic_name) ||
+    (typeof p.brands === 'string' && p.brands) ||
+    fallbackName;
 
-  // Merge every language ingredients field so "leche" / "milk" both match
-  const langTexts = Object.entries(p as Record<string, unknown>)
-    .filter(([k, v]) => k.startsWith('ingredients_text') && typeof v === 'string' && (v as string).trim().length > 2)
+  const langTexts = Object.entries(p)
+    .filter(
+      ([k, v]) =>
+        k.startsWith('ingredients_text') && typeof v === 'string' && (v as string).trim().length > 2
+    )
     .map(([, v]) => String(v).trim());
   const primary =
     (typeof p.ingredients_text === 'string' && p.ingredients_text.trim()) ||
     (typeof p.ingredients_text_es === 'string' && p.ingredients_text_es.trim()) ||
     (typeof p.ingredients_text_en === 'string' && p.ingredients_text_en.trim()) ||
+    (typeof p.ingredients_text_de === 'string' && p.ingredients_text_de.trim()) ||
     langTexts[0] ||
     '';
   const ingredientsText = [...new Set([primary, ...langTexts].filter(Boolean))].join('\n');
@@ -58,6 +57,13 @@ export async function fetchProductByBarcode(barcode: string): Promise<ProductLoo
     .filter((t): t is string => typeof t === 'string' && t.length > 0)
     .map((t) => t.toLowerCase());
 
+  const categoryTags = [
+    ...(Array.isArray(p.categories_tags) ? p.categories_tags : []),
+    ...(Array.isArray(p.categories_hierarchy) ? p.categories_hierarchy : []),
+  ]
+    .filter((t): t is string => typeof t === 'string' && t.length > 0)
+    .map((t) => t.toLowerCase());
+
   const allergensFromIngredients =
     typeof p.allergens_from_ingredients === 'string' ? p.allergens_from_ingredients : '';
 
@@ -67,5 +73,27 @@ export async function fetchProductByBarcode(barcode: string): Promise<ProductLoo
     ingredientsText: [ingredientsText, allergensFromIngredients].filter(Boolean).join('\n'),
     allergenTags: [...new Set(allergenTags)],
     ingredientTags,
+    categoryTags: [...new Set(categoryTags)],
   };
+}
+
+export async function fetchProductByBarcode(barcode: string): Promise<ProductLookup> {
+  for (const code of barcodeCandidates(barcode)) {
+    try {
+      const res = await fetch(`${BASE}/${code}.json`, {
+        headers: { 'User-Agent': 'SafeBite/1.0 (intolerance checker)' },
+      });
+      if (!res.ok) continue;
+
+      const data = await res.json();
+      const p = data?.product;
+      if (!p || data.status !== 1) continue;
+
+      return parseProduct(p as Record<string, unknown>, 'Unknown product');
+    } catch {
+      // try next candidate
+    }
+  }
+
+  return { found: false, name: '', ingredientsText: '' };
 }

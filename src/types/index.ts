@@ -61,9 +61,11 @@ export interface ScanResult {
   matched: MatchedIngredient[];
   unknown?: string[];
   /** Why we could not confidently say SAFE */
-  unknownReason?: 'no_avoid_list' | 'no_ingredients';
+  unknownReason?: 'no_avoid_list' | 'no_ingredients' | 'product_not_found';
   /** How many avoid-list items were checked */
   avoidCount?: number;
+  /** Offer manual paste of label ingredients */
+  needsManualIngredients?: boolean;
 }
 
 export interface MatchedIngredient {
@@ -80,4 +82,6 @@ export interface ProductLookup {
   allergenTags?: string[];
   /** Open Food Facts ingredient tags (may include long free-text tags) */
   ingredientTags?: string[];
+  /** Open Food Facts category tags e.g. en:kefir, en:yogurts */
+  categoryTags?: string[];
 }

@@ -108,7 +108,11 @@ type Keys =
   | 'resultNotSafeDetail'
   | 'resultNoAvoidList'
   | 'resultNoIngredients'
-  | 'resultIngredientsLabel';
+  | 'resultProductNotFound'
+  | 'resultIngredientsLabel'
+  | 'manualIngredientsTitle'
+  | 'manualIngredientsPlaceholder'
+  | 'manualIngredientsCheck';
 
 const en: Record<Keys, string> = {
   slogan: 'Scan. Smile. Bite.',
@@ -220,8 +224,13 @@ const en: Record<Keys, string> = {
   resultNoAvoidList:
     'Add ingredients to your avoid list before scanning. We cannot say SAFE with an empty list.',
   resultNoIngredients:
-    'This product has no ingredients data in the database. Check the package label manually.',
+    'This product has no ingredients in the database. Paste the label below to check.',
+  resultProductNotFound:
+    'Barcode not found in the database. Paste the ingredients from the package to check.',
   resultIngredientsLabel: 'Ingredients analyzed:',
+  manualIngredientsTitle: 'Paste ingredients from the label',
+  manualIngredientsPlaceholder: 'e.g. pasteurised milk, milk protein, lactic ferments…',
+  manualIngredientsCheck: 'Check these ingredients',
 };
 
 const es: Record<Keys, string> = {
@@ -333,8 +342,13 @@ const es: Record<Keys, string> = {
   resultNoAvoidList:
     'Añade ingredientes a tu lista antes de escanear. No podemos marcar APTO con la lista vacía.',
   resultNoIngredients:
-    'Este producto no tiene ingredientes en la base de datos. Revisa la etiqueta del envase.',
+    'Este producto no tiene ingredientes en la base de datos. Pega la etiqueta abajo para comprobarlo.',
+  resultProductNotFound:
+    'Código no encontrado en la base de datos. Pega los ingredientes del envase para comprobarlo.',
   resultIngredientsLabel: 'Ingredientes analizados:',
+  manualIngredientsTitle: 'Pega los ingredientes de la etiqueta',
+  manualIngredientsPlaceholder: 'ej. leche entera pasteurizada, proteínas de leche, fermentos lácteos…',
+  manualIngredientsCheck: 'Comprobar estos ingredientes',
 };
 
 const ca: Record<Keys, string> = {
@@ -440,8 +454,13 @@ const ca: Record<Keys, string> = {
   resultNoAvoidList:
     'Afegeix ingredients a la llista abans d\'escanejar. No podem marcar APTE amb la llista buida.',
   resultNoIngredients:
-    'Aquest producte no té ingredients a la base de dades. Revisa l\'etiqueta.',
+    'Aquest producte no té ingredients a la base de dades. Enganxa l\'etiqueta a sota per comprovar-ho.',
+  resultProductNotFound:
+    'Codi no trobat a la base de dades. Enganxa els ingredients de l\'envàs per comprovar-ho.',
   resultIngredientsLabel: 'Ingredients analitzats:',
+  manualIngredientsTitle: 'Enganxa els ingredients de l\'etiqueta',
+  manualIngredientsPlaceholder: 'ex. llet sencera pasteuritzada, proteïnes de llet, ferments làctics…',
+  manualIngredientsCheck: 'Comprovar aquests ingredients',
 };
 
 const it: Record<Keys, string> = {

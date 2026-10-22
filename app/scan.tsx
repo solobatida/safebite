@@ -15,11 +15,12 @@ import { ScanResultCard } from '@/components/ScanResultCard';
 import { WebBarcodeScanner } from '@/components/WebBarcodeScanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { getSession, getAvoidList } from '@/lib/storage';
-import { checkBarcode } from '@/lib/productCheck';
+import { checkBarcode, checkIngredientsText } from '@/lib/productCheck';
 import { t } from '@/i18n/translations';
 import type { ScanResult, UiLanguage } from '@/types';
 import { colors, spacing } from '@/constants/theme';
 import { FEATURES } from '@/constants/features';
+import { fonts } from '@/constants/fonts';
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function ScanScreen() {
   const [scanning, setScanning] = useState(true);
   const [loading, setLoading] = useState(false);
   const [manualCode, setManualCode] = useState('');
+  const [manualIngredients, setManualIngredients] = useState('');
   const [result, setResult] = useState<ScanResult | null>(null);
   const [lastCode, setLastCode] = useState('');
   const [profileName, setProfileName] = useState('');
@@ -54,8 +56,8 @@ export default function ScanScreen() {
       setLastCode(code);
       setLoading(true);
       setScanning(false);
+      setManualIngredients('');
       try {
-        // Always reload avoid list at scan time (avoids empty/stale state)
         const freshAvoid = await getAvoidList();
         setAvoidIds(freshAvoid);
         const res = await checkBarcode(code, freshAvoid, lang);
@@ -66,7 +68,7 @@ export default function ScanScreen() {
           return;
         }
         setResult(res);
-        if (res.unknown && res.unknown.length > 0) {
+        if (res.unknown && res.unknown.length > 0 && !res.needsManualIngredients) {
           const term = res.unknown[0];
           Alert.alert(t(lang, 'unknownTerm'), t(lang, 'unknownPrompt', { term }), [
             { text: t(lang, 'skip'), style: 'cancel' },
@@ -83,8 +85,29 @@ export default function ScanScreen() {
     [lang, lastCode, loading, router]
   );
 
+  const runManualIngredients = useCallback(async () => {
+    const text = manualIngredients.trim();
+    if (text.length < 3) {
+      Alert.alert(t(lang, 'error'), t(lang, 'errorMinChars'));
+      return;
+    }
+    setLoading(true);
+    try {
+      const freshAvoid = await getAvoidList();
+      setAvoidIds(freshAvoid);
+      const res = await checkIngredientsText(text, freshAvoid, lang, {
+        barcode: lastCode || manualCode,
+        productName: result?.productName || lastCode || manualCode,
+      });
+      setResult(res);
+    } finally {
+      setLoading(false);
+    }
+  }, [manualIngredients, lang, lastCode, manualCode, result?.productName]);
+
   const isWeb = Platform.OS === 'web';
   const canUseNativeCamera = !isWeb && permission?.granted;
+  const showManualIngredients = Boolean(result?.needsManualIngredients);
 
   if (!isWeb && !permission?.granted) {
     return (
@@ -145,20 +168,41 @@ export default function ScanScreen() {
 
       {result && <ScanResultCard result={result} lang={lang} />}
 
+      {showManualIngredients ? (
+        <View style={styles.manualBox}>
+          <Text style={styles.manualTitle}>{t(lang, 'manualIngredientsTitle')}</Text>
+          <TextInput
+            style={styles.manualInput}
+            placeholder={t(lang, 'manualIngredientsPlaceholder')}
+            placeholderTextColor={colors.textMuted}
+            value={manualIngredients}
+            onChangeText={setManualIngredients}
+            multiline
+            textAlignVertical="top"
+          />
+          <PrimaryButton
+            label={t(lang, 'manualIngredientsCheck')}
+            onPress={runManualIngredients}
+            style={{ marginTop: spacing.sm }}
+          />
+        </View>
+      ) : null}
+
       {!scanning && (
         <PrimaryButton
           label={t(lang, 'scanAgain')}
-          variant={result && !result.safe ? 'danger' : 'primary'}
+          variant={result && !result.safe && !result.unknownReason ? 'danger' : 'primary'}
           onPress={() => {
             setResult(null);
             setLastCode('');
+            setManualIngredients('');
             setScanning(true);
           }}
           style={{
             marginTop: spacing.md,
             marginBottom: spacing.xl,
             borderRadius: 14,
-            ...(result?.safe ? { backgroundColor: '#1FA855' } : null),
+            ...(result?.safe && !result.unknownReason ? { backgroundColor: '#1FA855' } : null),
           }}
         />
       )}
@@ -187,5 +231,30 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.sm,
     fontSize: 16,
+  },
+  manualBox: {
+    marginTop: spacing.md,
+    backgroundColor: colors.white,
+    borderRadius: 14,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  manualTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 15,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  manualInput: {
+    minHeight: 100,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    padding: spacing.md,
+    fontSize: 15,
+    fontFamily: fonts.regular,
+    color: colors.text,
+    backgroundColor: '#FAFBFA',
   },
 });

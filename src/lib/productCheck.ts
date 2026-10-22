@@ -1,6 +1,6 @@
 import { fetchProductByBarcode } from '@/lib/openFoodFacts';
 import { getDisplayLabel, loadIngredients, matchAvoidList } from '@/lib/ingredients';
-import type { ScanResult, UiLanguage } from '@/types';
+import type { MatchedIngredient, ProductLookup, ScanResult, UiLanguage } from '@/types';
 
 /** If user avoids milk, also check milk-protein derivatives in the same scan. */
 function expandAvoidIds(ids: string[]): string[] {
@@ -28,58 +28,41 @@ function expandAvoidIds(ids: string[]): string[] {
   return [...out];
 }
 
-export async function checkBarcode(
-  barcode: string,
+/** Category tags that strongly imply milk / dairy. */
+const DAIRY_CATEGORY_HINTS = [
+  'en:milk',
+  'en:dairies',
+  'en:dairy',
+  'en:fermented-milk-products',
+  'en:yogurts',
+  'en:yoghurts',
+  'en:kefir',
+  'en:cheeses',
+  'en:cream',
+  'en:butters',
+  'en:fromages-blancs-petits-suisses',
+  'en:dairy-drinks',
+  'en:milk-drinks',
+  'kefir',
+  'yogurt',
+  'yoghurt',
+  'dairy',
+];
+
+function categoryImpliesMilk(tags: string[] | undefined): boolean {
+  if (!tags?.length) return false;
+  return tags.some((tag) => DAIRY_CATEGORY_HINTS.some((hint) => tag.includes(hint)));
+}
+
+async function collapseMatched(
+  matched: MatchedIngredient[],
   avoidIds: string[],
   uiLang: UiLanguage
-): Promise<ScanResult | null> {
-  const product = await fetchProductByBarcode(barcode);
-  if (!product.found) return null;
-
-  const avoidCount = avoidIds.length;
-  const hasIngredientSignal =
-    product.ingredientsText.trim().length > 0 ||
-    (product.allergenTags?.length ?? 0) > 0 ||
-    (product.ingredientTags?.length ?? 0) > 0;
-
-  if (avoidCount === 0) {
-    return {
-      barcode,
-      productName: product.name,
-      ingredientsText: product.ingredientsText,
-      safe: false,
-      matched: [],
-      unknownReason: 'no_avoid_list',
-      avoidCount: 0,
-    };
-  }
-
-  if (!hasIngredientSignal) {
-    return {
-      barcode,
-      productName: product.name,
-      ingredientsText: product.ingredientsText,
-      safe: false,
-      matched: [],
-      unknownReason: 'no_ingredients',
-      avoidCount,
-    };
-  }
-
-  const { safe, matched, unknown } = await matchAvoidList(
-    product.ingredientsText,
-    expandAvoidIds(avoidIds),
-    uiLang,
-    {
-      allergenTags: product.allergenTags,
-      ingredientTags: product.ingredientTags,
-    }
-  );
-
+): Promise<MatchedIngredient[]> {
   const userAvoid = new Set(avoidIds);
   const catalog = await loadIngredients();
   const milk = catalog.find((i) => i.id === 'milk');
-  const collapsed: typeof matched = [];
+  const collapsed: MatchedIngredient[] = [];
   const seen = new Set<string>();
 
   for (const m of matched) {
@@ -93,14 +76,163 @@ export async function checkBarcode(
     seen.add(id);
     collapsed.push({ ...m, id, label });
   }
+  return collapsed;
+}
+
+async function runMatch(
+  product: ProductLookup,
+  avoidIds: string[],
+  uiLang: UiLanguage,
+  barcode: string
+): Promise<ScanResult> {
+  const avoidCount = avoidIds.length;
+  if (avoidCount === 0) {
+    return {
+      barcode,
+      productName: product.name,
+      ingredientsText: product.ingredientsText,
+      safe: false,
+      matched: [],
+      unknownReason: 'no_avoid_list',
+      avoidCount: 0,
+      needsManualIngredients: false,
+    };
+  }
+
+  const hasIngredientSignal =
+    product.ingredientsText.trim().length > 0 ||
+    (product.allergenTags?.length ?? 0) > 0 ||
+    (product.ingredientTags?.length ?? 0) > 0;
+
+  // Safety-first: dairy categories + milk on avoid list → not safe even without ingredient text
+  if (!hasIngredientSignal && avoidIds.includes('milk') && categoryImpliesMilk(product.categoryTags)) {
+    const catalog = await loadIngredients();
+    const milk = catalog.find((i) => i.id === 'milk');
+    return {
+      barcode,
+      productName: product.name,
+      ingredientsText: product.ingredientsText,
+      safe: false,
+      matched: milk
+        ? [
+            {
+              id: 'milk',
+              label: getDisplayLabel(milk, uiLang),
+              matchedTerm: 'category:dairy',
+            },
+          ]
+        : [],
+      avoidCount,
+    };
+  }
+
+  if (!hasIngredientSignal) {
+    return {
+      barcode,
+      productName: product.name || barcode,
+      ingredientsText: '',
+      safe: false,
+      matched: [],
+      unknownReason: product.found ? 'no_ingredients' : 'product_not_found',
+      avoidCount,
+      needsManualIngredients: true,
+    };
+  }
+
+  const { safe, matched, unknown } = await matchAvoidList(
+    product.ingredientsText,
+    expandAvoidIds(avoidIds),
+    uiLang,
+    {
+      allergenTags: product.allergenTags,
+      ingredientTags: product.ingredientTags,
+    }
+  );
 
   return {
     barcode,
     productName: product.name,
     ingredientsText: product.ingredientsText,
     safe,
-    matched: collapsed,
+    matched: await collapseMatched(matched, avoidIds, uiLang),
     unknown,
     avoidCount,
+  };
+}
+
+export async function checkBarcode(
+  barcode: string,
+  avoidIds: string[],
+  uiLang: UiLanguage
+): Promise<ScanResult | null> {
+  const product = await fetchProductByBarcode(barcode);
+
+  if (!product.found) {
+    // Not in OFF — still return a result so the user can paste the label
+    return {
+      barcode,
+      productName: barcode,
+      ingredientsText: '',
+      safe: false,
+      matched: [],
+      unknownReason: 'product_not_found',
+      avoidCount: avoidIds.length,
+      needsManualIngredients: true,
+    };
+  }
+
+  return runMatch(product, avoidIds, uiLang, barcode);
+}
+
+/** Check pasted label text against the avoid list (when OFF has no data). */
+export async function checkIngredientsText(
+  ingredientsText: string,
+  avoidIds: string[],
+  uiLang: UiLanguage,
+  meta?: { barcode?: string; productName?: string }
+): Promise<ScanResult> {
+  const text = ingredientsText.trim();
+  const barcode = meta?.barcode ?? '';
+  const productName = meta?.productName ?? barcode;
+
+  if (avoidIds.length === 0) {
+    return {
+      barcode,
+      productName,
+      ingredientsText: text,
+      safe: false,
+      matched: [],
+      unknownReason: 'no_avoid_list',
+      avoidCount: 0,
+    };
+  }
+
+  if (text.length < 3) {
+    return {
+      barcode,
+      productName,
+      ingredientsText: text,
+      safe: false,
+      matched: [],
+      unknownReason: 'no_ingredients',
+      avoidCount: avoidIds.length,
+      needsManualIngredients: true,
+    };
+  }
+
+  const { safe, matched, unknown } = await matchAvoidList(
+    text,
+    expandAvoidIds(avoidIds),
+    uiLang
+  );
+
+  return {
+    barcode,
+    productName,
+    ingredientsText: text,
+    safe,
+    matched: await collapseMatched(matched, avoidIds, uiLang),
+    unknown,
+    avoidCount: avoidIds.length,
   };
 }

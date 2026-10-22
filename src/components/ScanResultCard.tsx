@@ -17,6 +17,7 @@ export function ScanResultCard({ result, lang }: { result: ScanResult; lang: UiL
   const detail = (() => {
     if (result.unknownReason === 'no_avoid_list') return t(lang, 'resultNoAvoidList');
     if (result.unknownReason === 'no_ingredients') return t(lang, 'resultNoIngredients');
+    if (result.unknownReason === 'product_not_found') return t(lang, 'resultProductNotFound');
     if (ok) return t(lang, 'resultSafeDetail');
     return t(lang, 'resultNotSafeDetail', { count: String(count) });
   })();
