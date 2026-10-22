@@ -8,7 +8,6 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { PrimaryButton } from '@/components/PrimaryButton';
