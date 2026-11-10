@@ -139,20 +139,25 @@ export function AvoidList({
     return <Text style={styles.empty}>{t(lang, 'avoidListEmpty')}</Text>;
   }
 
+  const rows = ids.map((id) => {
+    const item = catalog.find((c) => c.id === id);
+    const label = item
+      ? getDisplayLabel(item, lang)
+      : id.replace(/^custom-/, '').replace(/-/g, ' ');
+    return { id, label };
+  });
+  rows.sort((a, b) => a.label.localeCompare(b.label, lang));
+
   return (
     <View style={styles.list}>
-      {ids.map((id) => {
-        const item = catalog.find((c) => c.id === id);
-        const label = item ? getDisplayLabel(item, lang) : id.replace(/^custom-/, '').replace(/-/g, ' ');
-        return (
-          <View key={id} style={styles.chip}>
-            <Text style={styles.chipText}>{label}</Text>
-            <Pressable onPress={() => onRemove(id)} hitSlop={8}>
-              <Text style={styles.remove}>✕</Text>
-            </Pressable>
-          </View>
-        );
-      })}
+      {rows.map(({ id, label }) => (
+        <View key={id} style={styles.chip}>
+          <Text style={styles.chipText}>{label}</Text>
+          <Pressable onPress={() => onRemove(id)} hitSlop={8}>
+            <Text style={styles.remove}>✕</Text>
+          </Pressable>
+        </View>
+      ))}
     </View>
   );
 }

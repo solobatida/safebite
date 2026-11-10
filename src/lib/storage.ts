@@ -595,27 +595,67 @@ export async function getAvoidList(): Promise<string[]> {
   if (session.isGuest) return [...guestAvoidList];
 
   if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
-    // All family profiles under this account (avoids empty list if active profile id drifted)
+    const activeId = session.activeProfileId;
+
+    const { data: activeRows, error: activeErr } = await supabase
+      .from('user_avoid_ingredients')
+      .select('ingredient_id')
+      .eq('family_profile_id', activeId);
+    if (activeErr) throw activeErr;
+
+    const activeIds = [
+      ...new Set((activeRows ?? []).map((r: { ingredient_id: string }) => r.ingredient_id)),
+    ];
+    if (activeIds.length > 0) return activeIds;
+
+    // Active profile empty: recover orphans from other family profiles (id drift / old wipe bug)
     const { data: profiles, error: profErr } = await supabase
       .from('family_profiles')
       .select('id')
       .eq('account_id', session.userId);
     if (profErr) throw profErr;
 
-    const profileIds = (profiles ?? []).map((p: { id: string }) => p.id);
-    if (profileIds.length === 0) {
-      // Fallback to session profile id
-      profileIds.push(session.activeProfileId);
-    }
+    const otherIds = (profiles ?? [])
+      .map((p: { id: string }) => p.id)
+      .filter((id: string) => id && id !== activeId);
+    if (otherIds.length === 0) return [];
 
-    const { data, error } = await supabase
+    const { data: orphanRows, error: orphanErr } = await supabase
       .from('user_avoid_ingredients')
       .select('ingredient_id')
-      .in('family_profile_id', profileIds);
-    if (error) throw error;
+      .in('family_profile_id', otherIds);
+    if (orphanErr) throw orphanErr;
 
-    const unique = [...new Set((data ?? []).map((r: { ingredient_id: string }) => r.ingredient_id))];
-    return unique;
+    const recovered = [
+      ...new Set((orphanRows ?? []).map((r: { ingredient_id: string }) => r.ingredient_id)),
+    ];
+    if (recovered.length === 0) return [];
+
+    // Copy onto the active profile so list + search stay in sync
+    const { data: known, error: knownErr } = await supabase
+      .from('ingredients')
+      .select('id')
+      .in('id', recovered);
+    if (knownErr) throw knownErr;
+    const knownIds = new Set((known ?? []).map((r: { id: string }) => r.id));
+    const toInsert = recovered.filter((id) => knownIds.has(id));
+    if (toInsert.length > 0) {
+      const { error: insErr } = await supabase.from('user_avoid_ingredients').insert(
+        toInsert.map((ingredient_id) => ({
+          family_profile_id: activeId,
+          ingredient_id,
+        }))
+      );
+      if (insErr) throw insErr;
+    }
+
+    // Drop orphans from other profiles so they no longer ghost-filter search
+    await supabase
+      .from('user_avoid_ingredients')
+      .delete()
+      .in('family_profile_id', otherIds);
+
+    return toInsert;
   }
 
   await migrateLegacyAvoidList(session.email, session.activeProfileId);
