@@ -247,25 +247,56 @@ const OFF_ALLERGEN_TO_ID: Record<string, string> = {
   'en:sulfites': 'sulphites',
   'en:lupin': 'lupin',
   'en:fish': 'fish',
-  'en:crustaceans': 'shrimp',
-  'en:molluscs': 'shrimp',
+  'en:crustaceans': 'crustaceans',
+  'en:molluscs': 'molluscs',
+  'en:mollusks': 'molluscs',
+  // Spanish / multilingual allergen tags sometimes appear without en: prefix
+  'es:leche': 'milk',
+  'es:huevo': 'egg',
+  'es:huevos': 'egg',
+  'es:gluten': 'wheat',
+  'es:cacahuete': 'peanut',
+  'es:cacahuetes': 'peanut',
+  'es:soja': 'soy',
+  'es:frutos-de-cascara': 'tree-nuts',
+  'es:frutos-secos': 'tree-nuts',
+  'es:pescado': 'fish',
+  'es:crustaceos': 'crustaceans',
+  'es:moluscos': 'molluscs',
+  'es:sesamo': 'sesame',
+  'es:mostaza': 'mustard',
+  'es:apio': 'celery',
+  'es:altramuces': 'lupin',
+  'es:sulfitos': 'sulphites',
 };
 
 /** Infer catalog id from free-form OFF tags / allergen strings. */
 function inferAllergenIdFromTag(tag: string): string | null {
   const n = normalize(tag);
   if (!n) return null;
-  if (/\b(milk|leche|lait|milch|latte|leite|dairy|lactose|lactos|lacteos|lactea|whey|casein)\b/.test(n)) {
+  if (
+    /\b(milk|leche|llet|lait|milch|latte|leite|dairy|lactose|lactos|lacteos|lactea|whey|casein|caseina|suero)\b/.test(
+      n
+    )
+  ) {
     return 'milk';
   }
-  if (/\b(egg|eggs|huevo|uovo|oeuf|ei)\b/.test(n)) return 'egg';
-  if (/\b(peanut|cacahuete|cacahuetes|arachide|erdnuss)\b/.test(n)) return 'peanut';
+  if (/\b(egg|eggs|huevo|huevos|ou|uovo|oeuf|ei)\b/.test(n)) return 'egg';
+  if (/\b(peanut|cacahuete|cacahuetes|cacahuate|arachide|erdnuss|mani)\b/.test(n)) return 'peanut';
   if (/\b(soy|soja|soya)\b/.test(n)) return 'soy';
-  if (/\b(gluten|wheat|trigo|blé|weizen)\b/.test(n)) return 'wheat';
-  if (/\b(sesame|sesamo|sésamo)\b/.test(n)) return 'sesame';
-  if (/\b(mustard|mostaza|moutarde|senf)\b/.test(n)) return 'mustard';
-  if (/\b(celery|apio|céleri|sellerie)\b/.test(n)) return 'celery';
-  if (/\b(fish|pescado|poisson|fisch|pesce)\b/.test(n)) return 'fish';
+  if (/\b(gluten|wheat|trigo|ble|weizen|blat)\b/.test(n)) return 'wheat';
+  if (/\b(sesame|sesamo|sesam)\b/.test(n)) return 'sesame';
+  if (/\b(mustard|mostaza|moutarde|senf|mostassa)\b/.test(n)) return 'mustard';
+  if (/\b(celery|apio|celeri|sellerie|api)\b/.test(n)) return 'celery';
+  if (/\b(crustacean|crustaceans|crustaceo|crustaceos|gamba|langostino|marisco)\b/.test(n)) {
+    return 'crustaceans';
+  }
+  if (/\b(mollusc|molluscs|mollusk|molusco|moluscos|pulpo|calamar|mejillón|mejillon)\b/.test(n)) {
+    return 'molluscs';
+  }
+  if (/\b(fish|pescado|peix|poisson|fisch|pesce|peixe)\b/.test(n)) return 'fish';
+  if (/\b(lupin|lupine|altramuz|altramuces|tramus)\b/.test(n)) return 'lupin';
+  if (/\b(sulphite|sulfite|sulfito|sulfitos)\b/.test(n)) return 'sulphites';
   return null;
 }
 

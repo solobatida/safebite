@@ -25,6 +25,59 @@ function expandAvoidIds(ids: string[]): string[] {
       out.add(id);
     }
   }
+  if (out.has('crustaceans')) {
+    for (const id of ['shrimp', 'lobster', 'crab', 'langoustine', 'crayfish']) out.add(id);
+  }
+  if (out.has('molluscs')) {
+    for (const id of ['octopus', 'squid', 'cuttlefish', 'mussel', 'clam', 'oyster', 'scallop']) {
+      out.add(id);
+    }
+  }
+  if (out.has('fish')) {
+    for (const id of [
+      'salmon',
+      'tuna',
+      'hake',
+      'cod',
+      'sea-bass',
+      'sea-bream',
+      'sole',
+      'sardine',
+      'anchovy',
+      'mackerel',
+      'trout',
+      'swordfish',
+      'monkfish',
+      'whiting',
+      'pollock',
+      'herring',
+      'tilapia',
+      'pangasius',
+      'grouper',
+      'turbot',
+    ]) {
+      out.add(id);
+    }
+  }
+  if (out.has('meat')) {
+    for (const id of [
+      'pork',
+      'beef',
+      'chicken',
+      'lamb',
+      'turkey',
+      'duck',
+      'goat',
+      'rabbit',
+      'veal',
+      'venison',
+      'horse',
+      'quail',
+      'goose',
+    ]) {
+      out.add(id);
+    }
+  }
   return [...out];
 }
 
@@ -54,6 +107,24 @@ function categoryImpliesMilk(tags: string[] | undefined): boolean {
   return tags.some((tag) => DAIRY_CATEGORY_HINTS.some((hint) => tag.includes(hint)));
 }
 
+const COLLAPSE_TO: Record<string, string> = {
+  whey: 'milk',
+  casein: 'milk',
+  cream: 'milk',
+  shrimp: 'crustaceans',
+  lobster: 'crustaceans',
+  crab: 'crustaceans',
+  langoustine: 'crustaceans',
+  crayfish: 'crustaceans',
+  octopus: 'molluscs',
+  squid: 'molluscs',
+  cuttlefish: 'molluscs',
+  mussel: 'molluscs',
+  clam: 'molluscs',
+  oyster: 'molluscs',
+  scallop: 'molluscs',
+};
+
 async function collapseMatched(
   matched: MatchedIngredient[],
   avoidIds: string[],
@@ -61,16 +132,36 @@ async function collapseMatched(
 ): Promise<MatchedIngredient[]> {
   const userAvoid = new Set(avoidIds);
   const catalog = await loadIngredients();
-  const milk = catalog.find((i) => i.id === 'milk');
   const collapsed: MatchedIngredient[] = [];
   const seen = new Set<string>();
 
   for (const m of matched) {
     let id = m.id;
     let label = m.label;
-    if (!userAvoid.has(id) && ['whey', 'casein', 'cream'].includes(id) && userAvoid.has('milk')) {
-      id = 'milk';
-      label = milk ? getDisplayLabel(milk, uiLang) : label;
+    const parent = COLLAPSE_TO[id];
+    if (parent && !userAvoid.has(id) && userAvoid.has(parent)) {
+      id = parent;
+      const parentIng = catalog.find((i) => i.id === parent);
+      label = parentIng ? getDisplayLabel(parentIng, uiLang) : label;
+    } else if (
+      !userAvoid.has(id) &&
+      userAvoid.has('fish') &&
+      catalog.find((i) => i.id === id)?.category === 'fish' &&
+      id !== 'crustaceans' &&
+      id !== 'molluscs' &&
+      !COLLAPSE_TO[id]
+    ) {
+      id = 'fish';
+      const fish = catalog.find((i) => i.id === 'fish');
+      label = fish ? getDisplayLabel(fish, uiLang) : label;
+    } else if (
+      !userAvoid.has(id) &&
+      userAvoid.has('meat') &&
+      catalog.find((i) => i.id === id)?.category === 'meat'
+    ) {
+      id = 'meat';
+      const meat = catalog.find((i) => i.id === 'meat');
+      label = meat ? getDisplayLabel(meat, uiLang) : label;
     }
     if (seen.has(id)) continue;
     seen.add(id);
@@ -165,7 +256,7 @@ export async function checkBarcode(
   avoidIds: string[],
   uiLang: UiLanguage
 ): Promise<ScanResult | null> {
-  const product = await fetchProductByBarcode(barcode);
+  const product = await fetchProductByBarcode(barcode, uiLang);
 
   if (!product.found) {
     // Not in OFF — still return a result so the user can paste the label

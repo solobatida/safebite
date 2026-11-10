@@ -1,4 +1,4 @@
-import type { ProductLookup } from '@/types';
+import type { ProductLookup, UiLanguage } from '@/types';
 
 const BASE = 'https://world.openfoodfacts.org/api/v2/product';
 
@@ -8,6 +8,61 @@ export const DEMO_BARCODES = {
   cocaCola: '5449000000996',
   water: '8000500310427',
 };
+
+/** OFF field suffixes to try for a UI language (best → fallback). */
+function langPriority(uiLang?: UiLanguage): string[] {
+  switch (uiLang) {
+    case 'es':
+      return ['es', 'ca', 'en', 'fr', 'it', 'pt', 'de'];
+    case 'ca':
+      return ['ca', 'es', 'en', 'fr'];
+    case 'fr':
+      return ['fr', 'en', 'es'];
+    case 'de':
+      return ['de', 'en', 'fr'];
+    case 'it':
+      return ['it', 'en', 'fr', 'es'];
+    case 'pt':
+      return ['pt', 'es', 'en'];
+    case 'ru':
+      return ['ru', 'en'];
+    case 'ar':
+      return ['ar', 'en', 'fr'];
+    case 'en':
+    default:
+      return ['en', 'es', 'fr', 'de', 'it', 'pt'];
+  }
+}
+
+function pickLocalizedString(
+  p: Record<string, unknown>,
+  base: string,
+  uiLang?: UiLanguage
+): string {
+  for (const lang of langPriority(uiLang)) {
+    const v = p[`${base}_${lang}`];
+    if (typeof v === 'string' && v.trim().length > 1) return v.trim();
+  }
+  const plain = p[base];
+  if (typeof plain === 'string' && plain.trim().length > 1) return plain.trim();
+  return '';
+}
+
+function allLocalizedStrings(p: Record<string, unknown>, base: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const [k, v] of Object.entries(p)) {
+    if (!k.startsWith(base)) continue;
+    if (typeof v !== 'string') continue;
+    const t = v.trim();
+    if (t.length < 2) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
 
 function barcodeCandidates(raw: string): string[] {
   const code = raw.replace(/\D/g, '');
@@ -19,29 +74,28 @@ function barcodeCandidates(raw: string): string[] {
   return [...out];
 }
 
-function parseProduct(p: Record<string, unknown>, fallbackName: string): ProductLookup {
+function parseProduct(
+  p: Record<string, unknown>,
+  fallbackName: string,
+  uiLang?: UiLanguage
+): ProductLookup {
   const name =
-    (typeof p.product_name === 'string' && p.product_name) ||
-    (typeof p.product_name_es === 'string' && p.product_name_es) ||
-    (typeof p.product_name_en === 'string' && p.product_name_en) ||
-    (typeof p.generic_name === 'string' && p.generic_name) ||
+    pickLocalizedString(p, 'product_name', uiLang) ||
+    pickLocalizedString(p, 'generic_name', uiLang) ||
     (typeof p.brands === 'string' && p.brands) ||
     fallbackName;
 
-  const langTexts = Object.entries(p)
-    .filter(
-      ([k, v]) =>
-        k.startsWith('ingredients_text') && typeof v === 'string' && (v as string).trim().length > 2
-    )
-    .map(([, v]) => String(v).trim());
-  const primary =
-    (typeof p.ingredients_text === 'string' && p.ingredients_text.trim()) ||
-    (typeof p.ingredients_text_es === 'string' && p.ingredients_text_es.trim()) ||
-    (typeof p.ingredients_text_en === 'string' && p.ingredients_text_en.trim()) ||
-    (typeof p.ingredients_text_de === 'string' && p.ingredients_text_de.trim()) ||
-    langTexts[0] ||
-    '';
-  const ingredientsText = [...new Set([primary, ...langTexts].filter(Boolean))].join('\n');
+  // Prefer UI language for what the user sees; keep every language for matching.
+  const preferredIngredients =
+    pickLocalizedString(p, 'ingredients_text_with_allergens', uiLang) ||
+    pickLocalizedString(p, 'ingredients_text', uiLang);
+  const allIngredientTexts = [
+    ...allLocalizedStrings(p, 'ingredients_text_with_allergens'),
+    ...allLocalizedStrings(p, 'ingredients_text'),
+  ];
+  const uniqueTexts = [...new Set([preferredIngredients, ...allIngredientTexts].filter(Boolean))];
+  // Preferred language first so the scan preview reads correctly
+  const ingredientsText = uniqueTexts.join('\n');
 
   const allergenTags = [
     ...(Array.isArray(p.allergens_tags) ? p.allergens_tags : []),
@@ -77,7 +131,10 @@ function parseProduct(p: Record<string, unknown>, fallbackName: string): Product
   };
 }
 
-export async function fetchProductByBarcode(barcode: string): Promise<ProductLookup> {
+export async function fetchProductByBarcode(
+  barcode: string,
+  uiLang?: UiLanguage
+): Promise<ProductLookup> {
   for (const code of barcodeCandidates(barcode)) {
     try {
       const res = await fetch(`${BASE}/${code}.json`, {
@@ -89,7 +146,7 @@ export async function fetchProductByBarcode(barcode: string): Promise<ProductLoo
       const p = data?.product;
       if (!p || data.status !== 1) continue;
 
-      return parseProduct(p as Record<string, unknown>, 'Unknown product');
+      return parseProduct(p as Record<string, unknown>, 'Unknown product', uiLang);
     } catch {
       // try next candidate
     }
