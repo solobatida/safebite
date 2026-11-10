@@ -17,12 +17,15 @@ export function IngredientSearch({
   onSelect,
   placeholder,
   excludeIds = [],
+  onAddCustom,
 }: {
   lang: UiLanguage;
   onSelect: (ing: Ingredient) => void;
   placeholder: string;
-  /** Ingredient ids already on the avoid list — hidden from suggestions */
+  /** Ingredient ids already on the avoid list — shown as disabled */
   excludeIds?: string[];
+  /** Opens the custom-ingredient flow */
+  onAddCustom?: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Ingredient[]>([]);
@@ -36,7 +39,6 @@ export function IngredientSearch({
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      // Fetch extra so items already on the avoid list still appear (as disabled)
       const results = await searchIngredients(query, 20, lang);
       if (!cancelled) setSuggestions(results);
     };
@@ -60,36 +62,18 @@ export function IngredientSearch({
 
   return (
     <View key={lang}>
-      <View style={styles.row}>
-        <TextInput
-          style={styles.input}
-          placeholder={placeholder}
-          placeholderTextColor={colors.textMuted}
-          value={query}
-          onChangeText={setQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="done"
-          onSubmitEditing={addFromQuery}
-          blurOnSubmit={false}
-        />
-        <Pressable
-          style={[
-            styles.addBtn,
-            (query.trim().length === 0 ||
-              !suggestions.some((ing) => !excluded.has(ing.id))) &&
-              styles.addBtnDisabled,
-          ]}
-          disabled={
-            query.trim().length === 0 || !suggestions.some((ing) => !excluded.has(ing.id))
-          }
-          onPress={addFromQuery}
-          accessibilityRole="button"
-          accessibilityLabel={t(lang, 'addIngredient')}
-        >
-          <Text style={styles.addBtnText}>{t(lang, 'add')}</Text>
-        </Pressable>
-      </View>
+      <TextInput
+        style={styles.input}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        value={query}
+        onChangeText={setQuery}
+        autoCapitalize="none"
+        autoCorrect={false}
+        returnKeyType="done"
+        onSubmitEditing={addFromQuery}
+        blurOnSubmit={false}
+      />
       {query.length > 0 && suggestions.length > 0 && (
         <View style={styles.dropdown}>
           {suggestions.map((item) => {
@@ -117,8 +101,13 @@ export function IngredientSearch({
           })}
         </View>
       )}
-      {query.trim().length >= 2 && suggestions.length === 0 ? (
-        <Text style={styles.noMatch}>{t(lang, 'addIngredientLink')}</Text>
+      {onAddCustom ? (
+        <Text style={styles.addLinkText}>
+          {t(lang, 'addIngredientLink')}
+          <Text style={styles.addLink} onPress={onAddCustom}>
+            {t(lang, 'addIngredientLinkHere')}
+          </Text>
+        </Text>
       ) : null}
     </View>
   );
@@ -163,13 +152,7 @@ export function AvoidList({
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: spacing.sm,
-  },
   input: {
-    flex: 1,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
@@ -177,22 +160,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     fontSize: 16,
     color: colors.text,
-  },
-  addBtn: {
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    maxWidth: 120,
-  },
-  addBtnDisabled: {
-    opacity: 0.45,
-  },
-  addBtnText: {
-    color: colors.white,
-    fontFamily: fonts.semibold,
-    fontSize: 14,
-    textAlign: 'center',
   },
   dropdown: {
     backgroundColor: colors.white,
@@ -226,11 +193,17 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   category: { fontSize: 12, color: colors.textMuted },
-  noMatch: {
-    marginTop: spacing.sm,
-    fontSize: 13,
+  addLinkText: {
+    marginTop: spacing.md,
+    fontSize: 14,
     fontFamily: fonts.regular,
     color: colors.textMuted,
+    lineHeight: 20,
+  },
+  addLink: {
+    color: colors.primary,
+    fontFamily: fonts.semibold,
+    textDecorationLine: 'underline',
   },
   list: { marginTop: spacing.md },
   empty: { color: colors.textMuted, fontStyle: 'italic', marginTop: spacing.md },

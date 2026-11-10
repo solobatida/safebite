@@ -210,17 +210,10 @@ export default function PreferencesScreen() {
         placeholder={t(lang, 'searchPlaceholder')}
         onSelect={addAvoid}
         excludeIds={avoidIds}
+        onAddCustom={() => setCustomModal(true)}
       />
       <Text style={styles.listTitle}>{t(lang, 'myAvoidList')}</Text>
       <AvoidList ids={avoidIds} lang={lang} catalog={catalog} onRemove={removeAvoid} />
-      <View style={styles.addLinkWrap}>
-        <Text style={styles.addLinkText}>
-          {t(lang, 'addIngredientLink')}
-          <Text style={styles.addLink} onPress={() => setCustomModal(true)}>
-            {t(lang, 'addIngredientLinkHere')}
-          </Text>
-        </Text>
-      </View>
       <Modal visible={customModal} transparent animationType="slide">
         <KeyboardAvoidingView
           style={styles.modalBackdrop}
@@ -296,23 +289,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
     color: colors.text,
-  },
-  addLinkWrap: {
-    marginTop: spacing.md,
-    alignSelf: 'center',
-    paddingVertical: spacing.sm,
-  },
-  addLinkText: {
-    fontFamily: fonts.regular,
-    fontSize: 14,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  addLink: {
-    fontFamily: fonts.semibold,
-    fontSize: 14,
-    color: colors.primaryDark,
-    textDecorationLine: 'underline',
   },
   modalBackdrop: {
     flex: 1,
