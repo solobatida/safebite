@@ -6,9 +6,26 @@ import type { MatchedIngredient, ProductLookup, ScanResult, UiLanguage } from '@
 function expandAvoidIds(ids: string[]): string[] {
   const out = new Set(ids);
   if (out.has('milk')) {
-    out.add('whey');
-    out.add('casein');
-    out.add('cream');
+    for (const id of [
+      'whey',
+      'whey-protein',
+      'casein',
+      'cream',
+      'butter',
+      'buttermilk',
+      'cheese',
+      'cheese-powder',
+      'milk-protein',
+      'milk-powder',
+      'lactose',
+      'lactalbumin',
+      'lactoglobulin',
+    ]) {
+      out.add(id);
+    }
+  }
+  if (out.has('milk-protein') || out.has('milk-powder') || out.has('whey-protein')) {
+    out.add('milk');
   }
   if (out.has('tree-nuts')) {
     for (const id of [
@@ -21,9 +38,27 @@ function expandAvoidIds(ids: string[]): string[] {
       'pecan',
       'brazil-nut',
       'pine-nut',
+      'chestnut',
+      'cola-nut',
+      'almond-flour',
+      'hazelnut-flour',
+      'walnut-flour',
+      'chestnut-flour',
     ]) {
       out.add(id);
     }
+  }
+  if (out.has('peanut')) out.add('peanut-flour');
+  if (out.has('lupin')) out.add('lupin-flour');
+  if (out.has('oats')) out.add('oat-flour');
+  if (out.has('wheat')) {
+    out.add('wheat-flour');
+    out.add('whole-wheat-flour');
+    out.add('bread-flour');
+    out.add('cake-flour');
+    out.add('semolina');
+    out.add('spelt-flour');
+    out.add('kamut-flour');
   }
   if (out.has('crustaceans')) {
     for (const id of ['shrimp', 'lobster', 'crab', 'langoustine', 'crayfish']) out.add(id);
@@ -109,8 +144,18 @@ function categoryImpliesMilk(tags: string[] | undefined): boolean {
 
 const COLLAPSE_TO: Record<string, string> = {
   whey: 'milk',
+  'whey-protein': 'milk',
   casein: 'milk',
   cream: 'milk',
+  butter: 'milk',
+  buttermilk: 'milk',
+  cheese: 'milk',
+  'cheese-powder': 'milk',
+  'milk-protein': 'milk',
+  'milk-powder': 'milk',
+  lactose: 'milk',
+  lactalbumin: 'milk',
+  lactoglobulin: 'milk',
   shrimp: 'crustaceans',
   lobster: 'crustaceans',
   crab: 'crustaceans',
