@@ -94,12 +94,26 @@ function suggestionTerms(ing: Ingredient, lang: UiLanguage): string[] {
   return [...terms];
 }
 
+function scoreAgainstQuery(terms: string[], q: string): number {
+  if (!q || terms.length === 0) return 0;
+  let score = 0;
+  const full = terms[0];
+  if (full.startsWith(q)) score = 100;
+  else if (full.includes(q)) score = 50;
+  for (const term of terms) {
+    if (term.startsWith(q)) score = Math.max(score, term === full ? 100 : 80);
+    else if (term.includes(q)) score = Math.max(score, 35);
+  }
+  return score;
+}
+
 export async function searchIngredients(
   query: string,
   limit = 12,
   lang: UiLanguage = 'es'
 ): Promise<Ingredient[]> {
   const list = await loadIngredients();
+  // Accents, commas and other punctuation are stripped in normalize()
   const q = normalize(query);
 
   // Suggestions only for ingredients with a label in the active UI language
@@ -108,24 +122,13 @@ export async function searchIngredients(
   if (!q) return withLang.slice(0, limit);
 
   const scored = withLang
-    .map((ing) => {
-      const terms = suggestionTerms(ing, lang);
-      if (terms.length === 0) return { ing, score: 0 };
-
-      let score = 0;
-      const full = terms[0];
-      if (full.startsWith(q)) score = 100;
-      else if (full.includes(q)) score = 50;
-      else {
-        for (const term of terms) {
-          if (term.startsWith(q)) score = Math.max(score, 80);
-          else if (term.includes(q)) score = Math.max(score, 35);
-        }
-      }
-      return { ing, score };
-    })
+    .map((ing) => ({
+      ing,
+      score: scoreAgainstQuery(suggestionTerms(ing, lang), q),
+      label: normalize(ing.labels[lang] ?? ''),
+    }))
     .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score || a.label.localeCompare(b.label));
 
   return scored.slice(0, limit).map((x) => x.ing);
 }

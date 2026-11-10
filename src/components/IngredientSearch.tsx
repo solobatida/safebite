@@ -36,28 +36,26 @@ export function IngredientSearch({
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const results = await searchIngredients(query, 12, lang);
-      if (!cancelled) {
-        setSuggestions(results.filter((ing) => !excluded.has(ing.id)));
-      }
+      // Fetch extra so items already on the avoid list still appear (as disabled)
+      const results = await searchIngredients(query, 20, lang);
+      if (!cancelled) setSuggestions(results);
     };
     run();
     return () => {
       cancelled = true;
     };
-  }, [query, lang, excludeIds.join('|')]);
+  }, [query, lang]);
 
   const pick = (ing: Ingredient) => {
+    if (excluded.has(ing.id)) return;
     onSelect(ing);
     setQuery('');
     setSuggestions([]);
   };
 
   const addFromQuery = () => {
-    if (suggestions.length > 0) {
-      pick(suggestions[0]);
-      return;
-    }
+    const firstAvailable = suggestions.find((ing) => !excluded.has(ing.id));
+    if (firstAvailable) pick(firstAvailable);
   };
 
   return (
@@ -76,8 +74,15 @@ export function IngredientSearch({
           blurOnSubmit={false}
         />
         <Pressable
-          style={[styles.addBtn, query.trim().length === 0 && styles.addBtnDisabled]}
-          disabled={query.trim().length === 0 || suggestions.length === 0}
+          style={[
+            styles.addBtn,
+            (query.trim().length === 0 ||
+              !suggestions.some((ing) => !excluded.has(ing.id))) &&
+              styles.addBtnDisabled,
+          ]}
+          disabled={
+            query.trim().length === 0 || !suggestions.some((ing) => !excluded.has(ing.id))
+          }
           onPress={addFromQuery}
           accessibilityRole="button"
           accessibilityLabel={t(lang, 'addIngredient')}
@@ -87,16 +92,29 @@ export function IngredientSearch({
       </View>
       {query.length > 0 && suggestions.length > 0 && (
         <View style={styles.dropdown}>
-          {suggestions.map((item) => (
-            <Pressable
-              key={`${lang}-${item.id}`}
-              style={styles.suggestion}
-              onPress={() => pick(item)}
-            >
-              <Text style={styles.suggestionText}>{getDisplayLabel(item, lang)}</Text>
-              <Text style={styles.category}>{item.category}</Text>
-            </Pressable>
-          ))}
+          {suggestions.map((item) => {
+            const already = excluded.has(item.id);
+            return (
+              <Pressable
+                key={`${lang}-${item.id}`}
+                style={[styles.suggestion, already && styles.suggestionDisabled]}
+                onPress={() => pick(item)}
+                disabled={already}
+              >
+                <View style={styles.suggestionMain}>
+                  <Text
+                    style={[styles.suggestionText, already && styles.suggestionTextDisabled]}
+                  >
+                    {getDisplayLabel(item, lang)}
+                  </Text>
+                  {already ? (
+                    <Text style={styles.alreadyHint}>{t(lang, 'ingredientAlreadyAdded')}</Text>
+                  ) : null}
+                </View>
+                <Text style={styles.category}>{item.category}</Text>
+              </Pressable>
+            );
+          })}
         </View>
       )}
       {query.trim().length >= 2 && suggestions.length === 0 ? (
@@ -181,12 +199,28 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   suggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
     padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  suggestionDisabled: {
+    opacity: 0.55,
+    backgroundColor: colors.background,
+  },
+  suggestionMain: { flex: 1 },
   suggestionText: { fontSize: 16, color: colors.text, fontWeight: '600' },
-  category: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  suggestionTextDisabled: { color: colors.textMuted },
+  alreadyHint: {
+    marginTop: 2,
+    fontSize: 12,
+    fontFamily: fonts.regular,
+    color: colors.textMuted,
+  },
+  category: { fontSize: 12, color: colors.textMuted },
   noMatch: {
     marginTop: spacing.sm,
     fontSize: 13,
