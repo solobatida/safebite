@@ -17,9 +17,24 @@ import { IngredientSearch, AvoidList } from '@/components/IngredientSearch';
 import { ProfileSwitcher } from '@/components/ProfileSwitcher';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
-import { getSession, getAvoidList, setAvoidList, clearSession, getProfiles, isGuestSession } from '@/lib/storage';
+import {
+  getSession,
+  getAvoidList,
+  addAvoidIngredient,
+  removeAvoidIngredient,
+  clearSession,
+  getProfiles,
+  isGuestSession,
+} from '@/lib/storage';
 import { FEATURES } from '@/constants/features';
-import { loadIngredients, createCustomIngredient, normalize, getDisplayLabel, getAllTerms } from '@/lib/ingredients';
+import {
+  loadIngredients,
+  createCustomIngredient,
+  clearIngredientsCache,
+  normalize,
+  getDisplayLabel,
+  getAllTerms,
+} from '@/lib/ingredients';
 import { t } from '@/i18n/translations';
 import type { FamilyProfile, Ingredient, UiLanguage } from '@/types';
 import { fonts } from '@/constants/fonts';
@@ -72,23 +87,23 @@ export default function PreferencesScreen() {
       Alert.alert(t(lang, 'error'), t(lang, 'ingredientAlreadyAdded'));
       return;
     }
-    const next = [...avoidIds, ing.id];
-    setAvoidIds(next);
+    const prev = avoidIds;
+    setAvoidIds([...prev, ing.id]);
     try {
-      await setAvoidList(next);
+      await addAvoidIngredient(ing.id);
     } catch (e) {
-      setAvoidIds(avoidIds);
+      await refresh();
       Alert.alert(t(lang, 'error'), e instanceof Error ? e.message : t(lang, 'errorSave'));
     }
   };
 
   const removeAvoid = async (id: string) => {
-    const next = avoidIds.filter((x) => x !== id);
-    setAvoidIds(next);
+    const prev = avoidIds;
+    setAvoidIds(prev.filter((x) => x !== id));
     try {
-      await setAvoidList(next);
+      await removeAvoidIngredient(id);
     } catch (e) {
-      setAvoidIds(avoidIds);
+      await refresh();
       Alert.alert(t(lang, 'error'), e instanceof Error ? e.message : t(lang, 'errorRemove'));
     }
   };
@@ -136,14 +151,16 @@ export default function PreferencesScreen() {
     setSavingCustom(true);
     try {
       const entry = await createCustomIngredient(text);
-      if (avoidIds.includes(entry.id)) {
-        Alert.alert(t(lang, 'error'), t(lang, 'ingredientAlreadyAdded'));
-        return;
+      try {
+        await addAvoidIngredient(entry.id);
+      } catch (avoidErr) {
+        // Ingredient created but avoid write failed — refresh so UI matches server
+        await refresh();
+        throw avoidErr;
       }
-      const next = [...avoidIds, entry.id];
-      setAvoidIds(next);
-      await setAvoidList(next);
+      clearIngredientsCache();
       setCatalog(await loadIngredients());
+      setAvoidIds(await getAvoidList());
       setCustomName('');
       setCustomModal(false);
     } catch (e) {

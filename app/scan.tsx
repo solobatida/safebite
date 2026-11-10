@@ -22,7 +22,6 @@ import type { ScanResult, UiLanguage } from '@/types';
 import { colors, spacing } from '@/constants/theme';
 import { FEATURES } from '@/constants/features';
 import { fonts } from '@/constants/fonts';
-import { APP_NAME } from '@/constants/brand';
 
 export default function ScanScreen() {
   const router = useRouter();
@@ -36,20 +35,28 @@ export default function ScanScreen() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [lastCode, setLastCode] = useState('');
   const [profileName, setProfileName] = useState('');
+  const [scanError, setScanError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       (async () => {
-        const session = await getSession();
-        if (!session) {
-          router.replace('/');
-          return;
+        try {
+          const session = await getSession();
+          if (!session) {
+            router.replace('/');
+            return;
+          }
+          setLang(session.uiLanguage);
+          setProfileName(session.activeProfileName);
+          setAvoidIds(await getAvoidList());
+        } catch (e) {
+          Alert.alert(
+            t(lang, 'error'),
+            e instanceof Error ? e.message : t(lang, 'errorLoad')
+          );
         }
-        setLang(session.uiLanguage);
-        setProfileName(session.activeProfileName);
-        setAvoidIds(await getAvoidList());
       })();
-    }, [router])
+    }, [router, lang])
   );
 
   const runCheck = useCallback(
@@ -59,14 +66,20 @@ export default function ScanScreen() {
       setLoading(true);
       setScanning(false);
       setManualIngredients('');
+      setScanError(null);
       try {
         const freshAvoid = await getAvoidList();
         setAvoidIds(freshAvoid);
         const res = await checkBarcode(code, freshAvoid, lang);
         if (!res) {
-          Alert.alert(APP_NAME, t(lang, 'productNotFound'));
+          setScanError(t(lang, 'productNotFound'));
           setScanning(true);
           setLastCode('');
+          return;
+        }
+        if (res.unknownReason === 'network_error') {
+          setScanError(t(lang, 'errorNetwork'));
+          setResult(res);
           return;
         }
         setResult(res);
@@ -80,6 +93,10 @@ export default function ScanScreen() {
             },
           ]);
         }
+      } catch (e) {
+        setScanError(e instanceof Error ? e.message : t(lang, 'errorScan'));
+        setLastCode('');
+        setScanning(true);
       } finally {
         setLoading(false);
       }
@@ -94,6 +111,7 @@ export default function ScanScreen() {
       return;
     }
     setLoading(true);
+    setScanError(null);
     try {
       const freshAvoid = await getAvoidList();
       setAvoidIds(freshAvoid);
@@ -102,6 +120,8 @@ export default function ScanScreen() {
         productName: result?.productName || lastCode || manualCode,
       });
       setResult(res);
+    } catch (e) {
+      setScanError(e instanceof Error ? e.message : t(lang, 'errorScan'));
     } finally {
       setLoading(false);
     }
@@ -187,6 +207,23 @@ export default function ScanScreen() {
 
       {loading && <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 12 }} />}
 
+      {scanError ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{scanError}</Text>
+          <PrimaryButton
+            label={t(lang, 'retry')}
+            onPress={() => {
+              const code = lastCode || manualCode;
+              setScanError(null);
+              setLastCode('');
+              if (code) runCheck(code);
+              else setScanning(true);
+            }}
+            style={{ marginTop: spacing.sm }}
+          />
+        </View>
+      ) : null}
+
       {result && <ScanResultCard result={result} lang={lang} />}
 
       {showManualIngredients ? (
@@ -217,6 +254,7 @@ export default function ScanScreen() {
             setResult(null);
             setLastCode('');
             setManualIngredients('');
+            setScanError(null);
             setScanning(true);
           }}
           style={{
@@ -252,6 +290,20 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.sm,
     fontSize: 16,
+  },
+  errorBox: {
+    marginTop: spacing.md,
+    backgroundColor: '#FFF5F5',
+    borderRadius: 12,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#F5C2C2',
+  },
+  errorText: {
+    fontFamily: fonts.regular,
+    fontSize: 14,
+    color: colors.danger,
+    lineHeight: 20,
   },
   manualBox: {
     marginTop: spacing.md,

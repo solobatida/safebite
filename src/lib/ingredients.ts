@@ -4,50 +4,73 @@ import { getCustomIngredients } from '@/lib/storage';
 
 let cache: Ingredient[] | null = null;
 let searchIndex: { term: string; ingredientId: string }[] | null = null;
+let loadInFlight: Promise<Ingredient[]> | null = null;
 
 export function clearIngredientsCache(): void {
   cache = null;
   searchIndex = null;
+  loadInFlight = null;
 }
 
 export async function loadIngredients(): Promise<Ingredient[]> {
   if (cache) return cache;
-  const custom = await getCustomIngredients();
-  let remoteCustom: Ingredient[] = [];
+  if (loadInFlight) return loadInFlight;
+
+  loadInFlight = (async () => {
+    const custom = await getCustomIngredients();
+    let remoteCustom: Ingredient[] = [];
+    let remoteOk = true;
+
+    try {
+      const { supabase, supabaseEnabled } = await import('@/lib/supabase');
+      const { getSession } = await import('@/lib/storage');
+      const session = await getSession();
+      if (
+        supabaseEnabled &&
+        supabase &&
+        session &&
+        !session.isGuest &&
+        !session.userId.startsWith('local-')
+      ) {
+        const { data, error } = await supabase
+          .from('ingredients')
+          .select('id,category,labels,aliases')
+          .like('id', 'custom-%');
+        if (error) {
+          remoteOk = false;
+        } else {
+          remoteCustom = (data ?? []).map((row: any) => ({
+            id: row.id as string,
+            category: (row.category as Ingredient['category']) || 'other',
+            labels: (row.labels ?? {}) as Ingredient['labels'],
+            aliases: (row.aliases as string[] | undefined) ?? [],
+          }));
+        }
+      }
+    } catch {
+      remoteOk = false;
+    }
+
+    const byId = new Map<string, Ingredient>();
+    for (const ing of [...SEED_INGREDIENTS, ...custom, ...remoteCustom]) {
+      byId.set(ing.id, ing);
+    }
+    const merged = [...byId.values()];
+    // Only cache a complete catalog; retry remote customs next time if fetch failed
+    if (remoteOk) {
+      cache = merged;
+      buildSearchIndex(cache);
+    } else {
+      buildSearchIndex(merged);
+    }
+    return merged;
+  })();
 
   try {
-    const { supabase, supabaseEnabled } = await import('@/lib/supabase');
-    const { getSession } = await import('@/lib/storage');
-    const session = await getSession();
-    if (
-      supabaseEnabled &&
-      supabase &&
-      session &&
-      !session.isGuest &&
-      !session.userId.startsWith('local-')
-    ) {
-      const { data } = await supabase
-        .from('ingredients')
-        .select('id,category,labels,aliases')
-        .like('id', 'custom-%');
-      remoteCustom = (data ?? []).map((row: any) => ({
-        id: row.id as string,
-        category: (row.category as Ingredient['category']) || 'other',
-        labels: (row.labels ?? {}) as Ingredient['labels'],
-        aliases: (row.aliases as string[] | undefined) ?? [],
-      }));
-    }
-  } catch {
-    // Offline / RLS — keep seed + local custom
+    return await loadInFlight;
+  } finally {
+    loadInFlight = null;
   }
-
-  const byId = new Map<string, Ingredient>();
-  for (const ing of [...SEED_INGREDIENTS, ...custom, ...remoteCustom]) {
-    byId.set(ing.id, ing);
-  }
-  cache = [...byId.values()];
-  buildSearchIndex(cache);
-  return cache;
 }
 
 function buildSearchIndex(ingredients: Ingredient[]): void {
@@ -152,71 +175,160 @@ export function getAllTerms(ing: Ingredient): string[] {
   return [...terms];
 }
 
+/** Broad OFF tag ids that also match when the user avoids a more specific child. */
+const BROAD_TAG_COVERS: Record<string, string[]> = {
+  'tree-nuts': [
+    'almond',
+    'hazelnut',
+    'walnut',
+    'cashew',
+    'pistachio',
+    'macadamia',
+    'pecan',
+    'brazil-nut',
+    'pine-nut',
+    'chestnut',
+    'cola-nut',
+  ],
+  milk: [
+    'whey',
+    'whey-protein',
+    'casein',
+    'cream',
+    'butter',
+    'buttermilk',
+    'cheese',
+    'cheese-powder',
+    'milk-protein',
+    'milk-powder',
+    'lactose',
+    'lactalbumin',
+    'lactoglobulin',
+  ],
+  fish: [
+    'salmon',
+    'tuna',
+    'hake',
+    'cod',
+    'sea-bass',
+    'sea-bream',
+    'sole',
+    'sardine',
+    'anchovy',
+    'mackerel',
+    'trout',
+    'swordfish',
+    'monkfish',
+    'whiting',
+    'pollock',
+    'herring',
+    'tilapia',
+    'pangasius',
+    'grouper',
+    'turbot',
+  ],
+  crustaceans: ['shrimp', 'lobster', 'crab', 'langoustine', 'crayfish'],
+  molluscs: ['octopus', 'squid', 'cuttlefish', 'mussel', 'clam', 'oyster', 'scallop'],
+  wheat: ['gluten', 'barley', 'rye', 'barley-malt', 'malt-extract', 'wheat-flour', 'semolina'],
+  gluten: ['wheat', 'barley', 'rye', 'barley-malt', 'malt-extract', 'wheat-flour', 'semolina'],
+  soy: ['soy-flour'],
+  egg: [],
+};
+
+function avoidHitsCatalogId(catalogId: string, avoidSet: Set<string>): boolean {
+  if (avoidSet.has(catalogId)) return true;
+  const children = BROAD_TAG_COVERS[catalogId];
+  if (children?.some((id) => avoidSet.has(id))) return true;
+  // Specific avoid → broad tag (e.g. avoid almond, OFF says en:nuts)
+  for (const [broad, kids] of Object.entries(BROAD_TAG_COVERS)) {
+    if (kids.includes(catalogId) && avoidSet.has(broad)) return true;
+  }
+  return false;
+}
+
 export async function matchAvoidList(
   ingredientsText: string,
   avoidIds: string[],
   uiLang: UiLanguage,
-  extra: { allergenTags?: string[]; ingredientTags?: string[] } = {}
-): Promise<{ safe: boolean; matched: MatchedIngredient[]; unknown: string[] }> {
+  extra: {
+    allergenTags?: string[];
+    ingredientTags?: string[];
+    traceTags?: string[];
+  } = {}
+): Promise<{
+  safe: boolean;
+  matched: MatchedIngredient[];
+  mayContain: MatchedIngredient[];
+  unknown: string[];
+}> {
   const list = await loadIngredients();
   const avoidSet = new Set(avoidIds);
+  const textNorm = normalize(ingredientsText);
   const tagHaystack = normalize(
     [...(extra.allergenTags ?? []), ...(extra.ingredientTags ?? [])].join(' ')
   );
+  // Text + tags for positive matching; tags alone never declare SAFE (caller enforces)
   const haystack = normalize([ingredientsText, tagHaystack].filter(Boolean).join(' '));
   const matched: MatchedIngredient[] = [];
   const matchedIds = new Set<string>();
+  const mayContain: MatchedIngredient[] = [];
+  const mayContainIds = new Set<string>();
 
-  // Direct map from Open Food Facts allergen tags → catalog ids
+  const pushMatch = (
+    id: string,
+    matchedTerm: string,
+    into: MatchedIngredient[],
+    seen: Set<string>
+  ) => {
+    if (seen.has(id)) return;
+    const ing = list.find((x) => x.id === id);
+    if (!ing) return;
+    into.push({ id, label: getDisplayLabel(ing, uiLang), matchedTerm });
+    seen.add(id);
+  };
+
   for (const tag of extra.allergenTags ?? []) {
     const id = OFF_ALLERGEN_TO_ID[tag.toLowerCase()] ?? inferAllergenIdFromTag(tag);
-    if (id && avoidSet.has(id) && !matchedIds.has(id)) {
-      const ing = list.find((x) => x.id === id);
-      if (ing) {
-        matched.push({
-          id,
-          label: getDisplayLabel(ing, uiLang),
-          matchedTerm: tag,
-        });
-        matchedIds.add(id);
-      }
+    if (id && avoidHitsCatalogId(id, avoidSet)) {
+      pushMatch(id, tag, matched, matchedIds);
     }
   }
 
-  // Ingredient tags often embed allergen words (e.g. "en:pasteurised cow's milk …")
   for (const tag of extra.ingredientTags ?? []) {
-    const id = inferAllergenIdFromTag(tag);
-    if (id && avoidSet.has(id) && !matchedIds.has(id)) {
-      const ing = list.find((x) => x.id === id);
-      if (ing) {
-        matched.push({
-          id,
-          label: getDisplayLabel(ing, uiLang),
-          matchedTerm: tag,
-        });
-        matchedIds.add(id);
-      }
+    const id = OFF_ALLERGEN_TO_ID[tag.toLowerCase()] ?? inferAllergenIdFromTag(tag);
+    if (id && avoidHitsCatalogId(id, avoidSet)) {
+      pushMatch(id, tag, matched, matchedIds);
+    }
+  }
+
+  for (const tag of extra.traceTags ?? []) {
+    const id = OFF_ALLERGEN_TO_ID[tag.toLowerCase()] ?? inferAllergenIdFromTag(tag);
+    if (id && avoidHitsCatalogId(id, avoidSet) && !matchedIds.has(id)) {
+      pushMatch(id, `trace:${tag}`, mayContain, mayContainIds);
     }
   }
 
   for (const ing of list) {
     if (!avoidSet.has(ing.id) || matchedIds.has(ing.id)) continue;
     for (const term of getAllTerms(ing)) {
-      if (term.length < 3) continue;
-      if (containsTerm(haystack, term)) {
-        matched.push({
-          id: ing.id,
-          label: getDisplayLabel(ing, uiLang),
-          matchedTerm: term,
-        });
-        matchedIds.add(ing.id);
+      if (term.length < 2) continue;
+      // Prefer ingredient text; fall back to tag haystack for longer terms only
+      const inText = textNorm ? containsTerm(textNorm, term) : false;
+      const inTags = !inText && term.length >= 3 ? containsTerm(haystack, term) : false;
+      if (inText || inTags) {
+        pushMatch(ing.id, term, matched, matchedIds);
         break;
       }
     }
   }
 
   const unknown = findUnknownTokens(ingredientsText, list);
-  return { safe: matched.length === 0, matched, unknown };
+  return {
+    safe: matched.length === 0 && mayContain.length === 0,
+    matched,
+    mayContain,
+    unknown,
+  };
 }
 
 /** Open Food Facts allergen taxonomy → catalog ingredient ids */
@@ -305,7 +417,13 @@ function inferAllergenIdFromTag(tag: string): string | null {
 
 function containsTerm(haystack: string, term: string): boolean {
   if (!term || !haystack) return false;
-  if (haystack.includes(term)) return true;
+  // Short terms (ou, Ei, ox): word-boundary only — substring would false-positive
+  if (term.length >= 3 && haystack.includes(term)) {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(^|[\\s,;(/])${escaped}([\\s,;.)/]|$)`, 'iu');
+    // Prefer boundary; allow substring only when term is long enough to be distinctive
+    if (re.test(haystack) || term.length >= 5) return true;
+  }
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`(^|[\\s,;(/])${escaped}([\\s,;.)/]|$)`, 'iu');
   return re.test(haystack);
@@ -352,9 +470,21 @@ export function slugifyIngredientName(name: string): string {
   return ascii.length >= 2 ? ascii : `x${Date.now().toString(36)}`;
 }
 
+function newCustomIngredientId(): string {
+  const uuid =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`.replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+  return `custom-${uuid}`;
+}
+
 /**
- * Create a custom ingredient in local catalog + Supabase ingredients (if logged in),
- * with the name copied to all UI languages.
+ * Create a custom ingredient in local catalog + Supabase ingredients (if logged in).
+ * Uses a per-user UUID id so users cannot overwrite each other's customs.
  */
 export async function createCustomIngredient(name: string): Promise<Ingredient> {
   const text = name.trim();
@@ -362,12 +492,11 @@ export async function createCustomIngredient(name: string): Promise<Ingredient> 
     throw new Error('Escribe al menos 2 caracteres.');
   }
 
-  const slug = slugifyIngredientName(text);
   const entry: Ingredient = {
-    id: `custom-${slug}`,
+    id: newCustomIngredientId(),
     category: 'other',
     labels: labelsForAllLanguages(text),
-    aliases: [text],
+    aliases: [text, slugifyIngredientName(text).replace(/-/g, ' ')].filter(Boolean),
   };
 
   const { addCustomIngredient: saveLocal, getSession } = await import('@/lib/storage');
@@ -381,21 +510,19 @@ export async function createCustomIngredient(name: string): Promise<Ingredient> 
     !session.isGuest &&
     !session.userId.startsWith('local-')
   ) {
-    const { error } = await supabase.from('ingredients').upsert(
-      {
-        id: entry.id,
-        category: entry.category,
-        labels: entry.labels,
-        aliases: entry.aliases ?? [],
-        status: 'approved',
-      },
-      { onConflict: 'id' }
-    );
+    // Insert only — never upsert/overwrite another user's custom row
+    const { error } = await supabase.from('ingredients').insert({
+      id: entry.id,
+      category: entry.category,
+      labels: entry.labels,
+      aliases: entry.aliases ?? [],
+      status: 'approved',
+      created_by: session.userId,
+    });
     if (error) throw error;
   }
 
   await saveLocal(entry);
-  cache = null;
-  searchIndex = null;
+  clearIngredientsCache();
   return entry;
 }

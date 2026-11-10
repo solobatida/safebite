@@ -111,6 +111,16 @@ function parseProduct(
     .filter((t): t is string => typeof t === 'string' && t.length > 0)
     .map((t) => t.toLowerCase());
 
+  const traceTags = [
+    ...(Array.isArray(p.traces_tags) ? p.traces_tags : []),
+    ...(Array.isArray(p.traces_hierarchy) ? p.traces_hierarchy : []),
+    ...(typeof p.traces === 'string'
+      ? p.traces.split(/,|;/).map((s: string) => s.trim()).filter(Boolean)
+      : []),
+  ]
+    .filter((t): t is string => typeof t === 'string' && t.length > 0)
+    .map((t) => t.toLowerCase());
+
   const categoryTags = [
     ...(Array.isArray(p.categories_tags) ? p.categories_tags : []),
     ...(Array.isArray(p.categories_hierarchy) ? p.categories_hierarchy : []),
@@ -127,20 +137,39 @@ function parseProduct(
     ingredientsText: [ingredientsText, allergensFromIngredients].filter(Boolean).join('\n'),
     allergenTags: [...new Set(allergenTags)],
     ingredientTags,
+    traceTags: [...new Set(traceTags)],
     categoryTags: [...new Set(categoryTags)],
   };
+}
+
+const OFF_TIMEOUT_MS = 10_000;
+
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OFF_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      headers: { 'User-Agent': 'ComeTranki/1.0 (intolerance checker)' },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function fetchProductByBarcode(
   barcode: string,
   uiLang?: UiLanguage
 ): Promise<ProductLookup> {
+  let sawNetworkError = false;
+
   for (const code of barcodeCandidates(barcode)) {
     try {
-      const res = await fetch(`${BASE}/${code}.json`, {
-        headers: { 'User-Agent': 'ComeTranki/1.0 (intolerance checker)' },
-      });
-      if (!res.ok) continue;
+      const res = await fetchWithTimeout(`${BASE}/${code}.json`);
+      if (!res.ok) {
+        if (res.status >= 500) sawNetworkError = true;
+        continue;
+      }
 
       const data = await res.json();
       const p = data?.product;
@@ -148,9 +177,9 @@ export async function fetchProductByBarcode(
 
       return parseProduct(p as Record<string, unknown>, 'Unknown product', uiLang);
     } catch {
-      // try next candidate
+      sawNetworkError = true;
     }
   }
 
-  return { found: false, name: '', ingredientsText: '' };
+  return { found: false, name: '', ingredientsText: '', networkError: sawNetworkError };
 }

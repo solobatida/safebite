@@ -51,6 +51,15 @@ function expandAvoidIds(ids: string[]): string[] {
   if (out.has('peanut')) out.add('peanut-flour');
   if (out.has('lupin')) out.add('lupin-flour');
   if (out.has('oats')) out.add('oat-flour');
+  if (out.has('soy')) out.add('soy-flour');
+  if (out.has('gluten') || out.has('wheat')) {
+    out.add('gluten');
+    out.add('wheat');
+    out.add('barley');
+    out.add('rye');
+    out.add('barley-malt');
+    out.add('malt-extract');
+  }
   if (out.has('wheat')) {
     out.add('wheat-flour');
     out.add('whole-wheat-flour');
@@ -60,6 +69,12 @@ function expandAvoidIds(ids: string[]): string[] {
     out.add('spelt-flour');
     out.add('kamut-flour');
   }
+  if (out.has('barley')) {
+    out.add('barley-flour');
+    out.add('barley-malt');
+    out.add('malt-extract');
+  }
+  if (out.has('rye')) out.add('rye-flour');
   if (out.has('crustaceans')) {
     for (const id of ['shrimp', 'lobster', 'crab', 'langoustine', 'crayfish']) out.add(id);
   }
@@ -235,13 +250,14 @@ async function runMatch(
     };
   }
 
-  const hasIngredientSignal =
-    product.ingredientsText.trim().length > 0 ||
-    (product.allergenTags?.length ?? 0) > 0 ||
-    (product.ingredientTags?.length ?? 0) > 0;
+  const hasIngredientsText = product.ingredientsText.trim().length > 0;
 
   // Safety-first: dairy categories + milk on avoid list → not safe even without ingredient text
-  if (!hasIngredientSignal && avoidIds.includes('milk') && categoryImpliesMilk(product.categoryTags)) {
+  if (
+    !hasIngredientsText &&
+    avoidIds.includes('milk') &&
+    categoryImpliesMilk(product.categoryTags)
+  ) {
     const catalog = await loadIngredients();
     const milk = catalog.find((i) => i.id === 'milk');
     return {
@@ -262,7 +278,50 @@ async function runMatch(
     };
   }
 
-  if (!hasIngredientSignal) {
+  // Tags may produce positive hits, but never declare SAFE without ingredient text
+  const { matched, mayContain, unknown } = await matchAvoidList(
+    product.ingredientsText,
+    expandAvoidIds(avoidIds),
+    uiLang,
+    {
+      allergenTags: product.allergenTags,
+      ingredientTags: product.ingredientTags,
+      traceTags: product.traceTags,
+    }
+  );
+
+  const collapsedMatched = await collapseMatched(matched, avoidIds, uiLang);
+  const collapsedTraces = await collapseMatched(mayContain, avoidIds, uiLang);
+
+  if (collapsedMatched.length > 0) {
+    return {
+      barcode,
+      productName: product.name,
+      ingredientsText: product.ingredientsText,
+      safe: false,
+      matched: collapsedMatched,
+      mayContain: collapsedTraces,
+      unknown,
+      avoidCount,
+      needsManualIngredients: !hasIngredientsText,
+    };
+  }
+
+  if (collapsedTraces.length > 0) {
+    return {
+      barcode,
+      productName: product.name,
+      ingredientsText: product.ingredientsText,
+      safe: false,
+      matched: [],
+      mayContain: collapsedTraces,
+      unknown,
+      avoidCount,
+      needsManualIngredients: !hasIngredientsText,
+    };
+  }
+
+  if (!hasIngredientsText) {
     return {
       barcode,
       productName: product.name || barcode,
@@ -275,22 +334,13 @@ async function runMatch(
     };
   }
 
-  const { safe, matched, unknown } = await matchAvoidList(
-    product.ingredientsText,
-    expandAvoidIds(avoidIds),
-    uiLang,
-    {
-      allergenTags: product.allergenTags,
-      ingredientTags: product.ingredientTags,
-    }
-  );
-
   return {
     barcode,
     productName: product.name,
     ingredientsText: product.ingredientsText,
-    safe,
-    matched: await collapseMatched(matched, avoidIds, uiLang),
+    safe: true,
+    matched: [],
+    mayContain: [],
     unknown,
     avoidCount,
   };
@@ -304,16 +354,15 @@ export async function checkBarcode(
   const product = await fetchProductByBarcode(barcode, uiLang);
 
   if (!product.found) {
-    // Not in OFF — still return a result so the user can paste the label
     return {
       barcode,
       productName: barcode,
       ingredientsText: '',
       safe: false,
       matched: [],
-      unknownReason: 'product_not_found',
+      unknownReason: product.networkError ? 'network_error' : 'product_not_found',
       avoidCount: avoidIds.length,
-      needsManualIngredients: true,
+      needsManualIngredients: !product.networkError,
     };
   }
 
@@ -356,18 +405,21 @@ export async function checkIngredientsText(
     };
   }
 
-  const { safe, matched, unknown } = await matchAvoidList(
+  const { matched, mayContain, unknown } = await matchAvoidList(
     text,
     expandAvoidIds(avoidIds),
     uiLang
   );
+  const collapsedMatched = await collapseMatched(matched, avoidIds, uiLang);
+  const collapsedTraces = await collapseMatched(mayContain, avoidIds, uiLang);
 
   return {
     barcode,
     productName,
     ingredientsText: text,
-    safe,
-    matched: await collapseMatched(matched, avoidIds, uiLang),
+    safe: collapsedMatched.length === 0 && collapsedTraces.length === 0,
+    matched: collapsedMatched,
+    mayContain: collapsedTraces,
     unknown,
     avoidCount: avoidIds.length,
   };

@@ -83,6 +83,9 @@ type Keys =
   | 'errorRemove'
   | 'errorMinChars'
   | 'errorSaveCustom'
+  | 'errorScan'
+  | 'errorNetwork'
+  | 'retry'
   | 'emailPasswordRequired'
   | 'nicknameRequired'
   | 'passwordTooShort'
@@ -110,6 +113,8 @@ type Keys =
   | 'resultNoAvoidList'
   | 'resultNoIngredients'
   | 'resultProductNotFound'
+  | 'resultMayContainLabel'
+  | 'resultMayContainDetail'
   | 'resultIngredientsLabel'
   | 'manualIngredientsTitle'
   | 'manualIngredientsPlaceholder'
@@ -198,7 +203,10 @@ const en: Record<Keys, string> = {
   errorSave: 'Could not save the ingredient',
   errorRemove: 'Could not remove the ingredient',
   errorMinChars: 'Enter at least 2 characters.',
-  errorSaveCustom: 'Could not save. If you use Supabase, run ingredients-custom-policy.sql',
+  errorSaveCustom: 'Could not save. If you use Supabase, run security-hardening.sql',
+  errorScan: 'Could not check this product. Try again.',
+  errorNetwork: 'Network error talking to the product database. Check your connection and retry.',
+  retry: 'Retry',
   emailPasswordRequired: 'Email and password are required',
   nicknameRequired: 'Enter a nickname (min. 2 characters)',
   passwordTooShort: 'Password must be at least 8 characters',
@@ -229,6 +237,8 @@ const en: Record<Keys, string> = {
     'This product has no ingredients in the database. Paste the label below to check.',
   resultProductNotFound:
     'Barcode not found in the database. Paste the ingredients from the package to check.',
+  resultMayContainLabel: 'May contain (traces):',
+  resultMayContainDetail: 'May contain {count} of your allergens (traces).',
   resultIngredientsLabel: 'Ingredients analyzed:',
   manualIngredientsTitle: 'Paste ingredients from the label',
   manualIngredientsPlaceholder: 'e.g. pasteurised milk, milk protein, lactic ferments…',
@@ -314,6 +324,9 @@ const es: Record<Keys, string> = {
   navResetPassword: 'Nueva contraseña',
   error: 'Error',
   errorLoad: 'No se pudieron cargar tus ingredientes',
+  errorScan: 'No se pudo comprobar este producto. Inténtalo de nuevo.',
+  errorNetwork: 'Error de red con la base de productos. Revisa la conexión e inténtalo otra vez.',
+  retry: 'Reintentar',
   errorSave: 'No se pudo guardar el ingrediente',
   errorRemove: 'No se pudo quitar el ingrediente',
   errorMinChars: 'Escribe al menos 2 caracteres.',
@@ -348,6 +361,8 @@ const es: Record<Keys, string> = {
     'Este producto no tiene ingredientes en la base de datos. Pega la etiqueta abajo para comprobarlo.',
   resultProductNotFound:
     'Código no encontrado en la base de datos. Pega los ingredientes del envase para comprobarlo.',
+  resultMayContainLabel: 'Puede contener (trazas):',
+  resultMayContainDetail: 'Puede contener {count} de tus alérgenos (trazas).',
   resultIngredientsLabel: 'Ingredientes analizados:',
   manualIngredientsTitle: 'Pega los ingredientes de la etiqueta',
   manualIngredientsPlaceholder: 'ej. leche entera pasteurizada, proteínas de leche, fermentos lácteos…',

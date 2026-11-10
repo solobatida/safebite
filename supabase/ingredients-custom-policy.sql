@@ -1,15 +1,7 @@
--- Allow authenticated users to add custom ingredients to the shared catalog
--- Run once in Supabase SQL Editor
-
-create policy "ingredients_insert_custom"
-  on public.ingredients
-  for insert
-  to authenticated
-  with check (id like 'custom-%' and status = 'approved');
-
-create policy "ingredients_update_custom"
-  on public.ingredients
-  for update
-  to authenticated
-  using (id like 'custom-%')
-  with check (id like 'custom-%' and status = 'approved');
+-- DEPRECATED — use security-hardening.sql instead.
+-- The old policies allowed any authenticated user to UPDATE any custom-* row
+-- (shared overwrite → false SAFE). Run:
+--
+--   supabase/security-hardening.sql
+--
+-- after schema.sql + seed-ingredients.sql.

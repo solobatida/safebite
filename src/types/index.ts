@@ -59,9 +59,11 @@ export interface ScanResult {
   ingredientsText: string;
   safe: boolean;
   matched: MatchedIngredient[];
+  /** Traces / "may contain" hits from OFF traces_tags */
+  mayContain?: MatchedIngredient[];
   unknown?: string[];
   /** Why we could not confidently say SAFE */
-  unknownReason?: 'no_avoid_list' | 'no_ingredients' | 'product_not_found';
+  unknownReason?: 'no_avoid_list' | 'no_ingredients' | 'product_not_found' | 'network_error';
   /** How many avoid-list items were checked */
   avoidCount?: number;
   /** Offer manual paste of label ingredients */
@@ -82,6 +84,10 @@ export interface ProductLookup {
   allergenTags?: string[];
   /** Open Food Facts ingredient tags (may include long free-text tags) */
   ingredientTags?: string[];
+  /** Open Food Facts traces / may-contain tags */
+  traceTags?: string[];
   /** Open Food Facts category tags e.g. en:kefir, en:yogurts */
   categoryTags?: string[];
+  /** Fetch failed (timeout/network) rather than a clean 404 */
+  networkError?: boolean;
 }

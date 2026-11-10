@@ -49,11 +49,15 @@ export default function RootLayout() {
     syncSession();
 
     const { data: sub } = client.auth.onAuthStateChange((event) => {
+      // TOKEN_REFRESHED must not wipe ingredient cache or reset active profile mid-scan
+      if (event !== 'SIGNED_IN' && event !== 'INITIAL_SESSION') return;
       setTimeout(async () => {
         if (cancelled) return;
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        try {
           clearGuestSession();
           await ensureCloudAccountSession();
+        } catch {
+          // non-fatal — keep existing local session
         }
       }, 0);
     });

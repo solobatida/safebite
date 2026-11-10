@@ -17,7 +17,16 @@ let guestAvoidList: string[] = [];
 let guestCustomIngredients: Ingredient[] = [];
 
 const GUEST_AVOID_KEY = '@safebite/guest_avoid';
+const GUEST_CUSTOM_KEY = '@safebite/guest_custom';
 const GUEST_SESSION_KEY = '@safebite/guest_session';
+
+/** Serialize cloud avoid writes so rapid taps cannot race */
+let avoidWriteChain: Promise<void> = Promise.resolve();
+
+function enqueueAvoidWrite(task: () => Promise<void>): Promise<void> {
+  avoidWriteChain = avoidWriteChain.then(task, task);
+  return avoidWriteChain;
+}
 
 function readGuestAvoidFromWeb(): string[] {
   try {
@@ -33,6 +42,25 @@ function writeGuestAvoidToWeb(ids: string[]): void {
   try {
     if (typeof sessionStorage === 'undefined') return;
     sessionStorage.setItem(GUEST_AVOID_KEY, JSON.stringify(ids));
+  } catch {
+    // ignore
+  }
+}
+
+function readGuestCustomFromWeb(): Ingredient[] {
+  try {
+    if (typeof sessionStorage === 'undefined') return [];
+    const raw = sessionStorage.getItem(GUEST_CUSTOM_KEY);
+    return raw ? (JSON.parse(raw) as Ingredient[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeGuestCustomToWeb(list: Ingredient[]): void {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    sessionStorage.setItem(GUEST_CUSTOM_KEY, JSON.stringify(list));
   } catch {
     // ignore
   }
@@ -77,9 +105,11 @@ export async function createGuestSession(uiLanguage: UiLanguage): Promise<UserSe
     isGuest: true,
   };
   guestSession = session;
-  guestAvoidList = [];
+  guestAvoidList = readGuestAvoidFromWeb();
+  guestCustomIngredients = readGuestCustomFromWeb();
   writeGuestSessionToWeb(session);
-  writeGuestAvoidToWeb([]);
+  writeGuestAvoidToWeb(guestAvoidList);
+  writeGuestCustomToWeb(guestCustomIngredients);
   return session;
 }
 
@@ -88,6 +118,13 @@ export function clearGuestSession(): void {
   guestAvoidList = [];
   guestCustomIngredients = [];
   writeGuestSessionToWeb(null);
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(GUEST_CUSTOM_KEY);
+    }
+  } catch {
+    // ignore
+  }
 }
 
 async function migrateLegacyStorageKeys(): Promise<void> {
@@ -175,8 +212,17 @@ export async function setSession(session: UserSession): Promise<void> {
 export async function clearSession(): Promise<void> {
   clearGuestSession();
   await AsyncStorage.removeItem(KEYS.session);
+  try {
+    const { clearIngredientsCache } = await import('@/lib/ingredients');
+    clearIngredientsCache();
+  } catch {
+    // ignore
+  }
   if (supabaseEnabled && supabase) {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      await supabase.auth.signOut({ scope: 'local' });
+    }
   }
 }
 
@@ -223,8 +269,8 @@ export async function ensureCloudAccountSession(): Promise<UserSession | null> {
       ? (user.user_metadata.ui_language as UiLanguage)
       : 'es');
 
-  // Default family profile row is created by trigger.
-  const { data: fp, error: fpErr } = await supabase
+  // Default family profile row is created by trigger; recreate if missing.
+  let { data: fp, error: fpErr } = await supabase
     .from('family_profiles')
     .select('id,display_name')
     .eq('account_id', user.id)
@@ -233,8 +279,18 @@ export async function ensureCloudAccountSession(): Promise<UserSession | null> {
     .maybeSingle<DbFamilyProfileRow>();
   if (fpErr) throw fpErr;
 
-  const activeProfileId = fp?.id ?? user.id;
-  const activeProfileName = fp?.display_name?.trim() || accountNickname;
+  if (!fp?.id) {
+    const { data: created, error: createErr } = await supabase
+      .from('family_profiles')
+      .insert({ account_id: user.id, display_name: accountNickname })
+      .select('id,display_name')
+      .single<DbFamilyProfileRow>();
+    if (createErr) throw createErr;
+    fp = created;
+  }
+
+  const activeProfileId = fp.id;
+  const activeProfileName = fp.display_name?.trim() || accountNickname;
 
   const session: UserSession = {
     email: user.email,
@@ -245,6 +301,14 @@ export async function ensureCloudAccountSession(): Promise<UserSession | null> {
     uiLanguage,
   };
   await setSession(session);
+
+  // One-shot orphan recovery (must not live inside getAvoidList reads)
+  try {
+    await recoverOrphanAvoidLists(session);
+  } catch {
+    // non-fatal
+  }
+
   try {
     const { clearIngredientsCache } = await import('@/lib/ingredients');
     clearIngredientsCache();
@@ -588,160 +652,252 @@ function avoidKey(email: string, profileId: string): string {
   return `${KEYS.avoid}:${email}:${profileId}`;
 }
 
+/** Read-only: active profile avoid ids (no writes). */
 export async function getAvoidList(): Promise<string[]> {
   const session = await getSession();
   if (!session) return [];
 
-  if (session.isGuest) return [...guestAvoidList];
+  if (session.isGuest) {
+    if (guestAvoidList.length === 0) guestAvoidList = readGuestAvoidFromWeb();
+    return [...guestAvoidList];
+  }
 
   if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
-    const activeId = session.activeProfileId;
-
-    const { data: activeRows, error: activeErr } = await supabase
+    const { data, error } = await supabase
       .from('user_avoid_ingredients')
       .select('ingredient_id')
-      .eq('family_profile_id', activeId);
-    if (activeErr) throw activeErr;
-
-    const activeIds = [
-      ...new Set((activeRows ?? []).map((r: { ingredient_id: string }) => r.ingredient_id)),
-    ];
-    if (activeIds.length > 0) return activeIds;
-
-    // Active profile empty: recover orphans from other family profiles (id drift / old wipe bug)
-    const { data: profiles, error: profErr } = await supabase
-      .from('family_profiles')
-      .select('id')
-      .eq('account_id', session.userId);
-    if (profErr) throw profErr;
-
-    const otherIds = (profiles ?? [])
-      .map((p: { id: string }) => p.id)
-      .filter((id: string) => id && id !== activeId);
-    if (otherIds.length === 0) return [];
-
-    const { data: orphanRows, error: orphanErr } = await supabase
-      .from('user_avoid_ingredients')
-      .select('ingredient_id')
-      .in('family_profile_id', otherIds);
-    if (orphanErr) throw orphanErr;
-
-    const recovered = [
-      ...new Set((orphanRows ?? []).map((r: { ingredient_id: string }) => r.ingredient_id)),
-    ];
-    if (recovered.length === 0) return [];
-
-    // Copy onto the active profile so list + search stay in sync
-    const { data: known, error: knownErr } = await supabase
-      .from('ingredients')
-      .select('id')
-      .in('id', recovered);
-    if (knownErr) throw knownErr;
-    const knownIds = new Set((known ?? []).map((r: { id: string }) => r.id));
-    const toInsert = recovered.filter((id) => knownIds.has(id));
-    if (toInsert.length > 0) {
-      const { error: insErr } = await supabase.from('user_avoid_ingredients').insert(
-        toInsert.map((ingredient_id) => ({
-          family_profile_id: activeId,
-          ingredient_id,
-        }))
-      );
-      if (insErr) throw insErr;
-    }
-
-    // Drop orphans from other profiles so they no longer ghost-filter search
-    await supabase
-      .from('user_avoid_ingredients')
-      .delete()
-      .in('family_profile_id', otherIds);
-
-    return toInsert;
+      .eq('family_profile_id', session.activeProfileId);
+    if (error) throw error;
+    return [...new Set((data ?? []).map((r: { ingredient_id: string }) => r.ingredient_id))];
   }
 
   await migrateLegacyAvoidList(session.email, session.activeProfileId);
-  const raw = await AsyncStorage.getItem(avoidKey(session.email, session.activeProfileId));
-  return raw ? JSON.parse(raw) : [];
+  try {
+    const raw = await AsyncStorage.getItem(avoidKey(session.email, session.activeProfileId));
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
 }
 
-export async function setAvoidList(ids: string[]): Promise<void> {
-  const session = await getSession();
-  if (!session) throw new Error('Not signed in');
-
-  if (session.isGuest) {
-    guestAvoidList = [...ids];
-    writeGuestAvoidToWeb(ids);
+/**
+ * Copy orphan avoid rows from other family profiles onto the active one.
+ * Call from login/session setup only — never from getAvoidList.
+ */
+export async function recoverOrphanAvoidLists(session: UserSession): Promise<void> {
+  if (!supabaseEnabled || !supabase || session.isGuest || session.userId.startsWith('local-')) {
     return;
   }
+  const activeId = session.activeProfileId;
+  const { data: profiles, error: profErr } = await supabase
+    .from('family_profiles')
+    .select('id')
+    .eq('account_id', session.userId);
+  if (profErr) throw profErr;
 
-  if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
-    // Diff update — never wipe-then-reinsert (an FK miss used to empty the whole list).
-    const profileId = session.activeProfileId;
-    const desired = [...new Set(ids)];
+  const otherIds = (profiles ?? [])
+    .map((p: { id: string }) => p.id)
+    .filter((id: string) => id && id !== activeId);
+  if (otherIds.length === 0) return;
 
-    const { data: existingRows, error: readErr } = await supabase
-      .from('user_avoid_ingredients')
-      .select('ingredient_id')
-      .eq('family_profile_id', profileId);
-    if (readErr) throw readErr;
+  const { data: orphanRows, error: orphanErr } = await supabase
+    .from('user_avoid_ingredients')
+    .select('ingredient_id')
+    .in('family_profile_id', otherIds);
+  if (orphanErr) throw orphanErr;
 
-    const current = new Set(
-      (existingRows ?? []).map((r: { ingredient_id: string }) => r.ingredient_id)
-    );
-    const desiredSet = new Set(desired);
-    const toAdd = desired.filter((id) => !current.has(id));
-    const toRemove = [...current].filter((id) => !desiredSet.has(id));
+  const recovered = [
+    ...new Set((orphanRows ?? []).map((r: { ingredient_id: string }) => r.ingredient_id)),
+  ];
+  if (recovered.length === 0) return;
 
-    if (toAdd.length > 0) {
-      const { data: known, error: knownErr } = await supabase
-        .from('ingredients')
-        .select('id')
-        .in('id', toAdd);
-      if (knownErr) throw knownErr;
-      const knownIds = new Set((known ?? []).map((r: { id: string }) => r.id));
-      const missing = toAdd.filter((id) => !knownIds.has(id));
-      if (missing.length > 0) {
+  const { data: known, error: knownErr } = await supabase
+    .from('ingredients')
+    .select('id')
+    .in('id', recovered);
+  if (knownErr) throw knownErr;
+  const knownIds = new Set((known ?? []).map((r: { id: string }) => r.id));
+  const toInsert = recovered.filter((id) => knownIds.has(id));
+  if (toInsert.length === 0) return;
+
+  const { error: insErr } = await supabase.from('user_avoid_ingredients').upsert(
+    toInsert.map((ingredient_id) => ({
+      family_profile_id: activeId,
+      ingredient_id,
+    })),
+    { onConflict: 'family_profile_id,ingredient_id', ignoreDuplicates: true }
+  );
+  if (insErr) throw insErr;
+
+  // Only delete orphans that were successfully known+copied
+  const { error: delErr } = await supabase
+    .from('user_avoid_ingredients')
+    .delete()
+    .in('family_profile_id', otherIds)
+    .in('ingredient_id', toInsert);
+  if (delErr) throw delErr;
+}
+
+async function filterKnownIngredientIds(ids: string[]): Promise<string[]> {
+  if (!supabase || ids.length === 0) return [];
+  const { data, error } = await supabase.from('ingredients').select('id').in('id', ids);
+  if (error) throw error;
+  const known = new Set((data ?? []).map((r: { id: string }) => r.id));
+  return ids.filter((id) => known.has(id));
+}
+
+/** Add one ingredient to the active avoid list (queued, idempotent). */
+export async function addAvoidIngredient(ingredientId: string): Promise<void> {
+  return enqueueAvoidWrite(async () => {
+    const session = await getSession();
+    if (!session) throw new Error('Not signed in');
+
+    if (session.isGuest) {
+      if (!guestAvoidList.includes(ingredientId)) {
+        guestAvoidList = [...guestAvoidList, ingredientId];
+        writeGuestAvoidToWeb(guestAvoidList);
+      }
+      return;
+    }
+
+    if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
+      const known = await filterKnownIngredientIds([ingredientId]);
+      if (known.length === 0) {
         throw new Error(
-          `Estos ingredientes aún no están en la base de datos: ${missing.join(', ')}. ` +
-            'Ejecuta supabase/seed-ingredients.sql en el SQL Editor de Supabase y vuelve a intentarlo.'
+          'Este ingrediente aún no está en la base de datos. Ejecuta supabase/seed-ingredients.sql y vuelve a intentarlo.'
         );
       }
-
-      const { error: insErr } = await supabase.from('user_avoid_ingredients').insert(
-        toAdd.map((ingredient_id) => ({
-          family_profile_id: profileId,
-          ingredient_id,
-        }))
+      const { error } = await supabase.from('user_avoid_ingredients').upsert(
+        {
+          family_profile_id: session.activeProfileId,
+          ingredient_id: ingredientId,
+        },
+        { onConflict: 'family_profile_id,ingredient_id', ignoreDuplicates: true }
       );
-      if (insErr) throw insErr;
+      if (error) throw error;
+      return;
     }
 
-    if (toRemove.length > 0) {
-      const { error: delErr } = await supabase
+    const current = await getAvoidList();
+    if (!current.includes(ingredientId)) {
+      await AsyncStorage.setItem(
+        avoidKey(session.email, session.activeProfileId),
+        JSON.stringify([...current, ingredientId])
+      );
+    }
+  });
+}
+
+/** Remove one ingredient from the active avoid list (queued). */
+export async function removeAvoidIngredient(ingredientId: string): Promise<void> {
+  return enqueueAvoidWrite(async () => {
+    const session = await getSession();
+    if (!session) throw new Error('Not signed in');
+
+    if (session.isGuest) {
+      guestAvoidList = guestAvoidList.filter((id) => id !== ingredientId);
+      writeGuestAvoidToWeb(guestAvoidList);
+      return;
+    }
+
+    if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
+      const { error } = await supabase
         .from('user_avoid_ingredients')
         .delete()
-        .eq('family_profile_id', profileId)
-        .in('ingredient_id', toRemove);
-      if (delErr) throw delErr;
+        .eq('family_profile_id', session.activeProfileId)
+        .eq('ingredient_id', ingredientId);
+      if (error) throw error;
+      return;
     }
 
-    return;
-  }
+    const current = await getAvoidList();
+    await AsyncStorage.setItem(
+      avoidKey(session.email, session.activeProfileId),
+      JSON.stringify(current.filter((id) => id !== ingredientId))
+    );
+  });
+}
 
-  await AsyncStorage.setItem(avoidKey(session.email, session.activeProfileId), JSON.stringify(ids));
+/** Replace avoid list via per-id add/remove (skips unknown cloud ids instead of failing the batch). */
+export async function setAvoidList(ids: string[]): Promise<void> {
+  return enqueueAvoidWrite(async () => {
+    const session = await getSession();
+    if (!session) throw new Error('Not signed in');
+    const desired = [...new Set(ids)];
+
+    if (session.isGuest) {
+      guestAvoidList = desired;
+      writeGuestAvoidToWeb(desired);
+      return;
+    }
+
+    if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
+      const profileId = session.activeProfileId;
+      const { data: existingRows, error: readErr } = await supabase
+        .from('user_avoid_ingredients')
+        .select('ingredient_id')
+        .eq('family_profile_id', profileId);
+      if (readErr) throw readErr;
+
+      const current = new Set(
+        (existingRows ?? []).map((r: { ingredient_id: string }) => r.ingredient_id)
+      );
+      const desiredSet = new Set(desired);
+      const toAdd = desired.filter((id) => !current.has(id));
+      const toRemove = [...current].filter((id) => !desiredSet.has(id));
+
+      const knownToAdd = await filterKnownIngredientIds(toAdd);
+      if (knownToAdd.length > 0) {
+        const { error: insErr } = await supabase.from('user_avoid_ingredients').upsert(
+          knownToAdd.map((ingredient_id) => ({
+            family_profile_id: profileId,
+            ingredient_id,
+          })),
+          { onConflict: 'family_profile_id,ingredient_id', ignoreDuplicates: true }
+        );
+        if (insErr) throw insErr;
+      }
+
+      if (toRemove.length > 0) {
+        const { error: delErr } = await supabase
+          .from('user_avoid_ingredients')
+          .delete()
+          .eq('family_profile_id', profileId)
+          .in('ingredient_id', toRemove);
+        if (delErr) throw delErr;
+      }
+      return;
+    }
+
+    await AsyncStorage.setItem(
+      avoidKey(session.email, session.activeProfileId),
+      JSON.stringify(desired)
+    );
+  });
 }
 
 export async function getCustomIngredients(): Promise<Ingredient[]> {
   const session = await getSession();
-  if (session?.isGuest) return [...guestCustomIngredients];
-  const raw = await AsyncStorage.getItem(KEYS.customIngredients);
-  return raw ? JSON.parse(raw) : [];
+  if (session?.isGuest) {
+    if (guestCustomIngredients.length === 0) {
+      guestCustomIngredients = readGuestCustomFromWeb();
+    }
+    return [...guestCustomIngredients];
+  }
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.customIngredients);
+    return raw ? (JSON.parse(raw) as Ingredient[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function addCustomIngredient(entry: Ingredient): Promise<void> {
   const session = await getSession();
   if (session?.isGuest) {
     if (guestCustomIngredients.some((i) => i.id === entry.id)) return;
-    guestCustomIngredients.push(entry);
+    guestCustomIngredients = [...guestCustomIngredients, entry];
+    writeGuestCustomToWeb(guestCustomIngredients);
     return;
   }
   const list = await getCustomIngredients();

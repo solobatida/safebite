@@ -14,11 +14,16 @@ export function ScanResultCard({ result, lang }: { result: ScanResult; lang: UiL
   const count = result.matched.length;
   const ingredientsPreview = result.ingredientsText?.trim().slice(0, 220);
 
+  const mayContain = result.mayContain ?? [];
   const detail = (() => {
     if (result.unknownReason === 'no_avoid_list') return t(lang, 'resultNoAvoidList');
     if (result.unknownReason === 'no_ingredients') return t(lang, 'resultNoIngredients');
     if (result.unknownReason === 'product_not_found') return t(lang, 'resultProductNotFound');
+    if (result.unknownReason === 'network_error') return t(lang, 'errorNetwork');
     if (ok) return t(lang, 'resultSafeDetail');
+    if (count === 0 && mayContain.length > 0) {
+      return t(lang, 'resultMayContainDetail', { count: String(mayContain.length) });
+    }
     return t(lang, 'resultNotSafeDetail', { count: String(count) });
   })();
 
@@ -51,6 +56,17 @@ export function ScanResultCard({ result, lang }: { result: ScanResult; lang: UiL
         <View style={styles.matchedBox}>
           {result.matched.map((m) => (
             <Text key={m.id} style={styles.matchedItem}>
+              {m.label}
+            </Text>
+          ))}
+        </View>
+      )}
+
+      {!ok && mayContain.length > 0 && (
+        <View style={styles.traceBox}>
+          <Text style={styles.traceLabel}>{t(lang, 'resultMayContainLabel')}</Text>
+          {mayContain.map((m) => (
+            <Text key={`trace-${m.id}`} style={styles.traceItem}>
               {m.label}
             </Text>
           ))}
@@ -152,6 +168,29 @@ const styles = StyleSheet.create({
     color: colors.danger,
     textAlign: 'center',
     marginBottom: 6,
+  },
+  traceBox: {
+    marginTop: spacing.sm,
+    width: '100%',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E8',
+    borderRadius: 14,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
+  traceLabel: {
+    fontSize: 13,
+    fontFamily: fonts.semibold,
+    color: '#C47F00',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  traceItem: {
+    fontSize: 15,
+    fontFamily: fonts.semibold,
+    color: '#C47F00',
+    textAlign: 'center',
+    marginBottom: 4,
   },
   ingredientsBox: {
     marginTop: spacing.md,

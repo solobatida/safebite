@@ -71,13 +71,20 @@ select * from public.admin_user_avoid_list;
 
 Estas vistas son solo para el panel de Supabase (no las usa la app móvil).
 
-### Ingredientes custom (añadir desde la app)
+### Ingredientes custom + hardening (obligatorio)
 
-Si al guardar un ingrediente nuevo falla, ejecuta en SQL Editor:
+Tras `schema.sql` y el seed, ejecuta en SQL Editor:
 
-[`ingredients-custom-policy.sql`](./ingredients-custom-policy.sql)
+[`security-hardening.sql`](./security-hardening.sql)
 
-Así los usuarios autenticados pueden insertar filas `custom-%` en `ingredients` (necesario por la FK de la lista a evitar). El nombre se copia a todos los idiomas del catálogo.
+Esto:
+- añade `created_by` a `ingredients`
+- limita lectura/escritura de `custom-%` al dueño (evita que un usuario sobrescriba el custom de otro → falso SAFE)
+- endurece `with check` en perfiles
+
+**Importante:** cada vez que cambies `src/data/ingredients.seed.ts`, regenera y vuelve a ejecutar el seed en producción (`npm run db:seed-sql` → pegar `seed-ingredients.sql`). Si el seed de la app y el de Supabase divergen, al añadir a la lista a evitar fallará la FK o se saltarán ids desconocidos.
+
+(El antiguo [`ingredients-custom-policy.sql`](./ingredients-custom-policy.sql) queda sustituido por `security-hardening.sql`.)
 
 ---
 
