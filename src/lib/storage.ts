@@ -634,21 +634,54 @@ export async function setAvoidList(ids: string[]): Promise<void> {
   }
 
   if (supabaseEnabled && supabase && !session.userId.startsWith('local-')) {
-    // Replace set for this profile.
+    // Diff update — never wipe-then-reinsert (an FK miss used to empty the whole list).
     const profileId = session.activeProfileId;
-    const { error: delErr } = await supabase
-      .from('user_avoid_ingredients')
-      .delete()
-      .eq('family_profile_id', profileId);
-    if (delErr) throw delErr;
+    const desired = [...new Set(ids)];
 
-    if (ids.length > 0) {
-      const rows = ids.map((ingredient_id) => ({
-        family_profile_id: profileId,
-        ingredient_id,
-      }));
-      const { error: insErr } = await supabase.from('user_avoid_ingredients').insert(rows);
+    const { data: existingRows, error: readErr } = await supabase
+      .from('user_avoid_ingredients')
+      .select('ingredient_id')
+      .eq('family_profile_id', profileId);
+    if (readErr) throw readErr;
+
+    const current = new Set(
+      (existingRows ?? []).map((r: { ingredient_id: string }) => r.ingredient_id)
+    );
+    const desiredSet = new Set(desired);
+    const toAdd = desired.filter((id) => !current.has(id));
+    const toRemove = [...current].filter((id) => !desiredSet.has(id));
+
+    if (toAdd.length > 0) {
+      const { data: known, error: knownErr } = await supabase
+        .from('ingredients')
+        .select('id')
+        .in('id', toAdd);
+      if (knownErr) throw knownErr;
+      const knownIds = new Set((known ?? []).map((r: { id: string }) => r.id));
+      const missing = toAdd.filter((id) => !knownIds.has(id));
+      if (missing.length > 0) {
+        throw new Error(
+          `Estos ingredientes aún no están en la base de datos: ${missing.join(', ')}. ` +
+            'Ejecuta supabase/seed-ingredients.sql en el SQL Editor de Supabase y vuelve a intentarlo.'
+        );
+      }
+
+      const { error: insErr } = await supabase.from('user_avoid_ingredients').insert(
+        toAdd.map((ingredient_id) => ({
+          family_profile_id: profileId,
+          ingredient_id,
+        }))
+      );
       if (insErr) throw insErr;
+    }
+
+    if (toRemove.length > 0) {
+      const { error: delErr } = await supabase
+        .from('user_avoid_ingredients')
+        .delete()
+        .eq('family_profile_id', profileId)
+        .in('ingredient_id', toRemove);
+      if (delErr) throw delErr;
     }
 
     return;
