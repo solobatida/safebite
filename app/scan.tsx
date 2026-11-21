@@ -15,8 +15,10 @@ import { ScanResultCard } from '@/components/ScanResultCard';
 import { WebBarcodeScanner } from '@/components/WebBarcodeScanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import * as ImagePicker from 'expo-image-picker';
 import { getSession, getAvoidList } from '@/lib/storage';
 import { checkBarcode, checkIngredientsText } from '@/lib/productCheck';
+import { extractIngredientsFromImage } from '@/lib/ocrIngredients';
 import { t } from '@/i18n/translations';
 import type { ScanResult, UiLanguage } from '@/types';
 import { colors, spacing } from '@/constants/theme';
@@ -36,6 +38,8 @@ export default function ScanScreen() {
   const [lastCode, setLastCode] = useState('');
   const [profileName, setProfileName] = useState('');
   const [scanError, setScanError] = useState<string | null>(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -126,6 +130,53 @@ export default function ScanScreen() {
       setLoading(false);
     }
   }, [manualIngredients, lang, lastCode, manualCode, result?.productName]);
+
+  const runLabelPhoto = useCallback(async () => {
+    if (ocrLoading || loading) return;
+    try {
+      const cam = await ImagePicker.requestCameraPermissionsAsync();
+      if (!cam.granted) {
+        const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!lib.granted) {
+          Alert.alert(t(lang, 'error'), t(lang, 'cameraPermission'));
+          return;
+        }
+      }
+
+      const picked = cam.granted
+        ? await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images'],
+            quality: 0.85,
+            allowsEditing: true,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            quality: 0.85,
+            allowsEditing: true,
+          });
+
+      if (picked.canceled || !picked.assets?.[0]?.uri) return;
+
+      setOcrLoading(true);
+      setOcrProgress(0);
+      setScanError(null);
+      const text = await extractIngredientsFromImage(
+        picked.assets[0].uri,
+        lang,
+        setOcrProgress
+      );
+      setManualIngredients(text);
+    } catch (e) {
+      const msg =
+        e instanceof Error && e.message === 'OCR_EMPTY'
+          ? t(lang, 'ocrEmpty')
+          : t(lang, 'ocrError');
+      Alert.alert(t(lang, 'error'), msg);
+    } finally {
+      setOcrLoading(false);
+      setOcrProgress(0);
+    }
+  }, [ocrLoading, loading, lang]);
 
   const isWeb = Platform.OS === 'web';
   const canUseNativeCamera = !isWeb && permission?.granted;
@@ -229,6 +280,15 @@ export default function ScanScreen() {
       {showManualIngredients ? (
         <View style={styles.manualBox}>
           <Text style={styles.manualTitle}>{t(lang, 'manualIngredientsTitle')}</Text>
+          <Text style={styles.manualHint}>{t(lang, 'manualIngredientsPhotoHint')}</Text>
+          <PrimaryButton
+            label={ocrLoading ? t(lang, 'ocrReading', { pct: String(ocrProgress) }) : t(lang, 'manualIngredientsPhoto')}
+            onPress={runLabelPhoto}
+            variant="secondary"
+          />
+          {ocrLoading ? (
+            <ActivityIndicator style={{ marginTop: spacing.sm }} color={colors.primary} />
+          ) : null}
           <TextInput
             style={styles.manualInput}
             placeholder={t(lang, 'manualIngredientsPlaceholder')}
@@ -237,6 +297,7 @@ export default function ScanScreen() {
             onChangeText={setManualIngredients}
             multiline
             textAlignVertical="top"
+            editable={!ocrLoading}
           />
           <PrimaryButton
             label={t(lang, 'manualIngredientsCheck')}
@@ -317,10 +378,18 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semibold,
     fontSize: 15,
     color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  manualHint: {
+    fontFamily: fonts.regular,
+    fontSize: 13,
+    color: colors.textMuted,
+    lineHeight: 18,
     marginBottom: spacing.sm,
   },
   manualInput: {
     minHeight: 100,
+    marginTop: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 10,

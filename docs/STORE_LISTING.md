@@ -1,4 +1,4 @@
-# Ficha de tienda — Come Tranki
+# Ficha de tienda — Safe Bite
 
 Precio sugerido: **0,99 €** (pago por descarga) en App Store y Google Play.
 
@@ -8,7 +8,7 @@ Sustituye `[URL_PRIVACIDAD]` por la URL pública de `docs/privacy-policy.html` c
 
 ## Nombre
 
-**Come Tranki**
+**Safe Bite**
 
 ## Subtítulo / short description (≤ 80 caracteres recomendado)
 
@@ -20,7 +20,7 @@ Sustituye `[URL_PRIVACIDAD]` por la URL pública de `docs/privacy-policy.html` c
 
 ## Descripción completa (ES)
 
-Come Tranki te ayuda en el supermercado: escanea el código de barras y comprueba si el producto encaja con los ingredientes que quieres evitar.
+Safe Bite te ayuda en el supermercado: escanea el código de barras y comprueba si el producto encaja con los ingredientes que quieres evitar.
 
 • Crea tu lista a evitar (intolerancias, preferencias, etc.)
 • Escanea con la cámara o prueba códigos demo
@@ -28,7 +28,7 @@ Come Tranki te ayuda en el supermercado: escanea el código de barras y comprueb
 • Varios idiomas de interfaz
 • Cuenta para guardar tu lista, o modo invitado para probar
 
-Importante: Come Tranki es solo informativo. Lee siempre el envase y consulta a un profesional ante alergias o dudas de salud.
+Importante: Safe Bite es solo informativo. Lee siempre el envase y consulta a un profesional ante alergias o dudas de salud.
 
 Política de privacidad: [URL_PRIVACIDAD]
 
@@ -36,7 +36,7 @@ Política de privacidad: [URL_PRIVACIDAD]
 
 ## Full description (EN)
 
-Come Tranki helps you in the supermarket: scan a barcode and check whether a product fits the ingredients you want to avoid.
+Safe Bite helps you in the supermarket: scan a barcode and check whether a product fits the ingredients you want to avoid.
 
 • Build your personal avoid list
 • Scan with the camera or try demo barcodes
@@ -44,7 +44,7 @@ Come Tranki helps you in the supermarket: scan a barcode and check whether a pro
 • Multiple interface languages
 • Sign in to save your list, or try guest mode
 
-Important: Come Tranki is informational only. Always read the physical package and consult a professional for allergies or health questions.
+Important: Safe Bite is informational only. Always read the physical package and consult a professional for allergies or health questions.
 
 Privacy policy: [URL_PRIVACIDAD]
 
@@ -75,7 +75,7 @@ escaneo,codigo barras,alérgenos,intolerancia,ingredientes,supermercado,alergia,
 
 Haz 4–6 pantallas en un iPhone y un Android reales (o simulador de alta calidad):
 
-1. Bienvenida con icono Come Tranki
+1. Bienvenida con icono Safe Bite
 2. Preferencias / lista a evitar
 3. Escaneo con cámara
 4. Resultado **apto** (cara verde + confetti)

@@ -1,6 +1,6 @@
-# Crear la base de datos en Supabase (SafeBite)
+# Crear la base de datos en Supabase (Safe Bite / SafeBite)
 
-Guía paso a paso. La app sigue usando el catálogo en código (`ingredients.seed.ts`); en Supabase guardas **cuentas**, **perfiles** y **listas a evitar** (cuando conectes auth en la app).
+Guía paso a paso. El catálogo canónico vive en código (`src/data/ingredients.seed.ts`) y se copia a `public.ingredients` vía seed SQL (necesario por la FK de la lista a evitar). En Supabase también viven **cuentas**, **perfiles familiares**, **listas a evitar** e **ingredientes custom** del usuario.
 
 ---
 
@@ -155,7 +155,7 @@ Reinicia Metro:
 npx expo start --clear
 ```
 
-> **Nota:** Con `.env` configurado, el cliente en `src/lib/supabase.ts` queda activo. El login de la app **sigue en local (AsyncStorage)** hasta que conectemos Supabase Auth en `login.tsx` (próximo paso).
+> **Nota:** Con `.env` configurado, el cliente en `src/lib/supabase.ts` queda activo. Login, perfiles y lista a evitar usan Supabase Auth + tablas cloud (con fallback local si no hay claves).
 
 ---
 
@@ -178,8 +178,33 @@ Tras crear un usuario de prueba en **Authentication** → **Users** → **Add us
 |------|------------------|
 | 1 | `schema.sql` en SQL Editor |
 | 2 | `npm run db:seed-sql` → `seed-ingredients.sql` en SQL Editor |
-| 3 | (Opcional) `admin-views.sql` → vistas de usuarios + listas |
-| 4 | `.env` con URL y anon key |
+| 3 | **`security-hardening.sql`** (obligatorio) |
+| 4 | (Opcional) `admin-views.sql` → vistas de usuarios + listas |
+| 5 | `.env` con URL y anon key |
+| 6 | Auth providers + Redirect URLs (email / Google / reset) |
+
+---
+
+## 7. MCP de Supabase en Cursor (opcional)
+
+Para que el agente de Cursor consulte el proyecto sin pegar SQL a mano:
+
+1. En `~/.cursor/mcp.json` añade (ajusta `project_ref` al de tu URL `https://<ref>.supabase.co`):
+
+```json
+{
+  "mcpServers": {
+    "supabase": {
+      "url": "https://mcp.supabase.com/mcp?project_ref=TU_PROJECT_REF"
+    }
+  }
+}
+```
+
+2. Cursor → **Settings → Tools & MCP** → activa Supabase → inicia sesión en el navegador.
+3. Reinicia Cursor si las tools no aparecen.
+
+Útil para verificar policies, conteos de `ingredients`, o si el hardening está aplicado (`created_by`, policies `ingredients_read_seed_or_own_custom` / `ingredients_insert_own_custom`).
 
 ---
 
@@ -188,9 +213,12 @@ Tras crear un usuario de prueba en **Authentication** → **Users** → **Add us
 | Error | Solución |
 |-------|----------|
 | `relation already exists` | Ya ejecutaste `schema.sql`; no hace falta repetir salvo que borres tablas |
-| FK al insertar avoid list | Ejecuta antes `seed-ingredients.sql` |
+| FK al insertar avoid list | Ejecuta / regenera `seed-ingredients.sql` tras cambiar el seed TS |
+| Fallo al guardar custom | Ejecuta `security-hardening.sql` |
+| Aviso “destructive operations” en hardening | Normal: solo hace `DROP POLICY` + crea policies nuevas; no borra filas de ingredientes |
 | La app no lee `.env` | Reinicia con `npx expo start --clear` |
 | No aparece perfil tras signup | Revisa que el trigger `on_auth_user_created` exista (final de `schema.sql`) |
 | Login 400 `email_not_confirmed` | Abre el enlace del email de confirmación, o desactiva *Confirm email* en Auth (solo dev) |
+| Producto italiano / local “no encontrado” | Cobertura de Open Food Facts; usar foto OCR o pegar ingredientes en Scan |
 
-¿Siguiente paso? Conectar **login** y **lista a evitar** a Supabase cuando quieras; dímelo y lo implementamos en el código.
+Auth, lista a evitar y customs cloud ya están conectados en la app. Tras cambios de esquema o seed, vuelve a aplicar los SQL de arriba.

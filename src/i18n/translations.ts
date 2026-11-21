@@ -118,7 +118,12 @@ type Keys =
   | 'resultIngredientsLabel'
   | 'manualIngredientsTitle'
   | 'manualIngredientsPlaceholder'
-  | 'manualIngredientsCheck';
+  | 'manualIngredientsCheck'
+  | 'manualIngredientsPhoto'
+  | 'manualIngredientsPhotoHint'
+  | 'ocrReading'
+  | 'ocrEmpty'
+  | 'ocrError';
 
 const en: Record<Keys, string> = {
   slogan: 'Scan. Smile. Bite.',
@@ -240,9 +245,14 @@ const en: Record<Keys, string> = {
   resultMayContainLabel: 'May contain (traces):',
   resultMayContainDetail: 'May contain {count} of your allergens (traces).',
   resultIngredientsLabel: 'Ingredients analyzed:',
-  manualIngredientsTitle: 'Paste ingredients from the label',
+  manualIngredientsTitle: 'Read the ingredients from the label',
   manualIngredientsPlaceholder: 'e.g. pasteurised milk, milk protein, lactic ferments…',
   manualIngredientsCheck: 'Check these ingredients',
+  manualIngredientsPhoto: 'Photo of ingredients',
+  manualIngredientsPhotoHint: 'Take a clear photo of the ingredients list. You can edit the text before checking.',
+  ocrReading: 'Reading label… {pct}%',
+  ocrEmpty: 'Could not read text from the photo. Try again with more light, or type the ingredients.',
+  ocrError: 'Could not read the photo. Try again or type the ingredients.',
 };
 
 const es: Record<Keys, string> = {
@@ -364,9 +374,15 @@ const es: Record<Keys, string> = {
   resultMayContainLabel: 'Puede contener (trazas):',
   resultMayContainDetail: 'Puede contener {count} de tus alérgenos (trazas).',
   resultIngredientsLabel: 'Ingredientes analizados:',
-  manualIngredientsTitle: 'Pega los ingredientes de la etiqueta',
+  manualIngredientsTitle: 'Lee los ingredientes de la etiqueta',
   manualIngredientsPlaceholder: 'ej. leche entera pasteurizada, proteínas de leche, fermentos lácteos…',
   manualIngredientsCheck: 'Comprobar estos ingredientes',
+  manualIngredientsPhoto: 'Foto de los ingredientes',
+  manualIngredientsPhotoHint:
+    'Haz una foto clara de la lista de ingredientes. Puedes editar el texto antes de comprobar.',
+  ocrReading: 'Leyendo etiqueta… {pct}%',
+  ocrEmpty: 'No se pudo leer texto en la foto. Prueba con más luz o escribe los ingredientes.',
+  ocrError: 'No se pudo leer la foto. Inténtalo de nuevo o escribe los ingredientes.',
 };
 
 const ca: Record<Keys, string> = {
@@ -477,9 +493,15 @@ const ca: Record<Keys, string> = {
   resultProductNotFound:
     'Codi no trobat a la base de dades. Enganxa els ingredients de l\'envàs per comprovar-ho.',
   resultIngredientsLabel: 'Ingredients analitzats:',
-  manualIngredientsTitle: 'Enganxa els ingredients de l\'etiqueta',
+  manualIngredientsTitle: 'Llegeix els ingredients de l\'etiqueta',
   manualIngredientsPlaceholder: 'ex. llet sencera pasteuritzada, proteïnes de llet, ferments làctics…',
   manualIngredientsCheck: 'Comprovar aquests ingredients',
+  manualIngredientsPhoto: 'Foto dels ingredients',
+  manualIngredientsPhotoHint:
+    'Fes una foto clara de la llista d\'ingredients. Pots editar el text abans de comprovar.',
+  ocrReading: 'Llegint etiqueta… {pct}%',
+  ocrEmpty: 'No s\'ha pogut llegir text a la foto. Prova amb més llum o escriu els ingredients.',
+  ocrError: 'No s\'ha pogut llegir la foto. Torna-ho a provar o escriu els ingredients.',
 };
 
 const it: Record<Keys, string> = {

@@ -149,7 +149,7 @@ async function fetchWithTimeout(url: string): Promise<Response> {
   const timer = setTimeout(() => controller.abort(), OFF_TIMEOUT_MS);
   try {
     return await fetch(url, {
-      headers: { 'User-Agent': 'ComeTranki/1.0 (intolerance checker)' },
+      headers: { 'User-Agent': 'SafeBite/1.0 (intolerance checker)' },
       signal: controller.signal,
     });
   } finally {

@@ -1,8 +1,10 @@
-# Come Tranki
+# Safe Bite
 
-Mobile app to scan supermarket barcodes and check whether a product is safe for **your** intolerances and allergies. Ingredient names are matched across **English, French, German, Spanish, Italian, Portuguese, Russian, and Arabic**.
+Mobile app to scan supermarket barcodes and check whether a product is safe for **your** intolerances and allergies. Ingredient names are matched across **English, French, German, Spanish, Italian, Portuguese, Russian, Arabic, and Catalan**.
 
 Full product specification: [SPECIFICATION.md](./SPECIFICATION.md)
+
+**Production (web):** https://solobatida-safebite.expo.app
 
 ---
 
@@ -10,13 +12,14 @@ Full product specification: [SPECIFICATION.md](./SPECIFICATION.md)
 
 | Layer | Choice | Why |
 |-------|--------|-----|
-| App | **Expo** + **React Native** + **TypeScript** | One codebase → iOS + Android; test on your phone with Expo Go; publish with EAS Build |
+| App | **Expo ~54** + **React Native** + **TypeScript** | One codebase → iOS + Android + web; EAS Hosting for the web app |
 | Local test | `npm start` → web or phone | No Xcode/Android Studio required for first tests |
-| Database (production) | **Supabase** (free tier) | PostgreSQL, email/password auth, easy dashboard, good for Apple privacy docs |
-| Barcode products | **Open Food Facts** | Free API, millions of EU products |
-| MVP auth | **AsyncStorage** on device | Works offline for demo; swap to Supabase when you create a project |
+| Database | **Supabase** (Postgres + Auth + RLS) | Accounts, family profiles, avoid-lists, owned custom ingredients |
+| Barcode products | **Open Food Facts** | Free community API; coverage varies by country/brand |
+| Label fallback | **Camera/photo OCR** (Tesseract.js) | When the barcode is missing or has no ingredients text |
+| Guest mode | Memory + `sessionStorage` (web) | Try the app without an account; cleared when the tab/app closes |
 
-**Languages you’ll touch:** TypeScript (app), SQL (Supabase schema in `supabase/schema.sql`), JSON (ingredient data).
+**Languages you’ll touch:** TypeScript (app), SQL (Supabase in `supabase/`), JSON-like ingredient seed data.
 
 ---
 
@@ -38,83 +41,113 @@ npm start
 
 A browser tab opens (Expo Dev Tools). Choose:
 
-- **`w`** — open in **web browser** (good for UI; use demo barcode buttons on Scan screen)
+- **`w`** — open in **web browser** (good for UI; use demo barcode or type a code on Scan)
 - Scan QR with **Expo Go** on your **phone** (real barcode camera)
 
 ### 3. Try the app flow
 
-1. **Welcome** → Enter (guest) or Login (email + password, min 8 chars).
-2. **Language** → pick UI language.
-3. **Preferences** → search e.g. `sorbitol`, `corn starch`, `gluten` → add to avoid list.
-4. **Scan** → on phone, point at barcode; on web, tap **Nutella** demo or type `3017620422003`.
+1. **Welcome** → Enter as guest, or Login / Sign up.
+2. **Language** (guest) or go straight to preferences after auth.
+3. **Preferences** → search e.g. `sorbitol`, `leche`, `gluten` → add to avoid list. Missing term? Use the link under search to add a **custom** ingredient.
+4. **Scan** → point at barcode (phone) or type a code (web).
+5. If the product is **not in Open Food Facts** (or has no ingredients): use **Foto de los ingredientes**, review the OCR text, then **Comprobar**.
 
-Green = no avoided ingredient found in the label text. Red = match found (shows which terms matched).
-
----
-
-## Step-by-step: test on your phone (recommended for barcode)
-
-1. Phone and Mac on the **same Wi‑Fi**.
-2. Run `npm start`.
-3. Open **Expo Go**, scan the QR code.
-4. Allow **camera** when asked on the Scan screen.
+Green / SAFE = no avoided ingredient found. Red / NOT SAFE = match found. Amber **?** = inconclusive (empty avoid list, no ingredients text, network error, etc.).
 
 ---
 
-## Connect Supabase (optional, for real accounts + cloud DB)
+## Scan behaviour (important)
+
+Safe Bite does **not** own a product database. It looks up barcodes in **Open Food Facts**:
+
+| Situation | What you see |
+|-----------|----------------|
+| Product found + ingredients text | SAFE / NOT SAFE (+ optional “may contain” traces) |
+| Product found but **no** ingredients text | Inconclusive → paste or **photo OCR** of the label |
+| Barcode **not** in OFF (common for some Italian / local SKUs) | Not found → same manual / photo path |
+| Network / timeout | Error + Retry |
+
+**Allergen tags alone never declare SAFE.** Tags and traces can produce positive “not safe / may contain” hits; declaring SAFE requires ingredient text (or a successful manual/OCR check).
+
+---
+
+## Connect Supabase
 
 **Guía detallada en español:** [`supabase/SETUP.md`](./supabase/SETUP.md)
 
-Resumen:
+Orden mínimo:
 
-1. Crear proyecto gratis en [https://supabase.com](https://supabase.com).
-2. SQL Editor → ejecutar [`supabase/schema.sql`](./supabase/schema.sql).
-3. `npm run db:seed-sql` → ejecutar [`supabase/seed-ingredients.sql`](./supabase/seed-ingredients.sql) en SQL Editor.
-4. Settings → API → copiar URL y **anon** key a `.env` (`cp .env.example .env`).
+1. [`supabase/schema.sql`](./supabase/schema.sql)
+2. `npm run db:seed-sql` → ejecutar [`supabase/seed-ingredients.sql`](./supabase/seed-ingredients.sql)
+3. [`supabase/security-hardening.sql`](./supabase/security-hardening.sql) (**obligatorio** — owner de customs + RLS)
+4. Copiar URL + anon key a `.env` (`cp .env.example .env`)
 5. `npx expo start --clear`
 
-(Supabase auth en la app: preparado en `src/lib/supabase.ts`; login sigue local hasta el siguiente paso de integración.)
+Cada vez que cambies `src/data/ingredients.seed.ts`, regenera y vuelve a aplicar el seed en Supabase. Si el seed de la app y el de la nube divergen, fallan FKs al guardar la lista a evitar.
 
-**Why Supabase:** free tier, web UI, Row Level Security, fits App Store “account + data” expectations.
+Optional: Cursor MCP for Supabase is documented in SETUP (query DB from the IDE).
 
 ---
 
 ## Publish to Apple & Google
 
-Checklist completo (privacidad, EAS env vars, ficha 0,99 €, build, submit):
+Checklist completo (privacidad, EAS env vars, ficha, build, submit):
 
 → **[`docs/PUBLISH.md`](./docs/PUBLISH.md)**
 
 También: [`docs/privacy-policy.html`](./docs/privacy-policy.html) · [`docs/STORE_LISTING.md`](./docs/STORE_LISTING.md)
 
-Resumen: Apple Developer + Google Play, URL de privacidad pública, secretos `EXPO_PUBLIC_SUPABASE_*` en EAS, capturas, precio 0,99 €, `eas build` / `eas submit`.
+Web deploy:
+
+```bash
+npm run web:deploy          # export + preview deploy
+eas deploy --prod           # promote current export to production
+```
 
 ---
 
 ## Project layout
 
 ```
-app/                 Screens (Expo Router)
-  index.tsx          Welcome + boom logo
-  login.tsx          Email / password
-  language.tsx       UI language
-  preferences.tsx    Avoid list + search
-  scan.tsx           Barcode + result
+app/                      Screens (Expo Router)
+  index.tsx               Welcome
+  login.tsx               Email / Google / password reset
+  language.tsx            Guest language
+  preferences.tsx         Avoid list + custom ingredient
+  scan.tsx                Barcode + OCR fallback + result
 src/
-  data/              Ingredient seed (100+ items, 8 languages)
-  lib/               Matching, Open Food Facts, storage
-  i18n/              UI translations
-SPECIFICATION.md     Full product spec
-supabase/schema.sql  Production database
+  data/ingredients.seed.ts   Catalog (code source of truth)
+  lib/
+    storage.ts            Session, avoid writes (queued), guest mirror
+    ingredients.ts        Catalog load, match, custom UUID create
+    productCheck.ts       Expand avoid ids, SAFE / inconclusive rules
+    openFoodFacts.ts      Barcode fetch + traces + timeout
+    ocrIngredients.ts     Tesseract OCR from label photo
+  i18n/                   UI translations
+supabase/
+  schema.sql
+  seed-ingredients.sql
+  security-hardening.sql  Owner RLS for custom-* ingredients
+SPECIFICATION.md          Full product spec
 ```
 
 ---
 
 ## Grow the ingredient list
 
-- Edit `src/data/ingredients.seed.ts` (canonical list).
-- Users tap **Add custom ingredient** (saved locally; clears cache on next load).
-- Later: sync `ingredients` table in Supabase and approve community submissions.
+1. Edit `src/data/ingredients.seed.ts`.
+2. `npm run db:seed-sql` and run the generated SQL in Supabase.
+3. Users can also add **custom** ingredients (`custom-<uuid>`, owned by `created_by`) from Preferences.
+
+---
+
+## Security notes (avoid false SAFE)
+
+- Custom ingredients are **per-user** (`created_by` + UUID id); no shared slug upsert.
+- Avoid-list cloud writes are **per item** + serialized queue (no wipe-then-reinsert).
+- Orphan avoid rows (old profile id drift) are recovered **once at login**, not inside every read.
+- Sign-out clears local session and ingredient cache; falls back to local Supabase sign-out if network fails.
+- See [`supabase/security-hardening.sql`](./supabase/security-hardening.sql) and SPECIFICATION §4 / §3.2.
 
 ---
 
@@ -122,18 +155,18 @@ supabase/schema.sql  Production database
 
 | Problem | Fix |
 |---------|-----|
-| Camera not working on web | Expected — use phone or demo barcode |
-| Product not found | Barcode missing in Open Food Facts; try another product |
-| Module `@/` not found | Restart Metro: `npm start -- --clear` |
-| Expo permission error on Mac | Run install/start outside restricted folders |
+| Camera not working on web | Use phone Expo Go, or type barcode + photo OCR |
+| Product not found | Missing in Open Food Facts — use photo / paste ingredients |
+| OCR empty / garbage | More light, crop to the ingredients block, edit text before check |
+| FK / “ingredient not in database” | Re-run `seed-ingredients.sql` after catalog changes |
+| Custom ingredient save fails | Run `security-hardening.sql` |
+| Module `@/` not found | `npx expo start --clear` |
 
 ---
 
 ## Next steps you might want
 
-- Wire Supabase Auth into `login.tsx`
-- Import seed ingredients into Supabase with a script
-- OCR photo of ingredient list (v2)
-- RTL layout for Arabic
-
-Questions about a step? Say which step (install, phone, Supabase, or store) and we can go deeper.
+- Scan history per profile
+- Stronger OCR / Vision API for hard labels
+- Contribute missing products back to Open Food Facts
+- RTL layout polish for Arabic

@@ -1,8 +1,8 @@
-# Come Tranki — Product Specification
+# Safe Bite — Product Specification
 
 ## 1. Vision
 
-**Come Tranki** helps people with food intolerances, allergies, or dietary preferences scan supermarket products by barcode and instantly see whether the product is safe for them. Ingredient lists are often in French, German, or other languages; Come Tranki matches ingredients against a multilingual database and the user’s personal avoid-list.
+**Safe Bite** helps people with food intolerances, allergies, or dietary preferences scan supermarket products by barcode and instantly see whether the product is safe for them. Ingredient lists are often in French, German, or other languages; Safe Bite matches ingredients against a multilingual database and the user’s personal avoid-list.
 
 **Slogan (examples):** *“Scan. Know. Eat safe.”* / *“Your pocket ingredient translator.”*
 
@@ -18,7 +18,7 @@
 **Apple App Store notes (must follow for approval):**
 
 - Clear **Privacy Policy** URL describing email, preferences, scan history.
-- **Camera** permission with a specific reason (barcode only).
+- **Camera** permission with a specific reason (barcode **and** ingredient-label photos for OCR).
 - Do **not** claim to be a medical device; use wording like *“informational assistant — always verify the physical label.”*
 - Support **Sign in with Apple** if you offer other third-party login (required when using social login).
 - Use **HTTPS** for all API/database traffic.
@@ -26,9 +26,10 @@
 
 **Recommended stack (this project):**
 
-- **App:** TypeScript + **Expo** (React Native) — one codebase, `npm start` for local test, Expo Go on phone.
-- **Database & auth:** **Supabase** (free tier) — PostgreSQL, email/password auth, dashboard, Row Level Security.
-- **Product lookup:** **Open Food Facts** API (free, community barcode database).
+- **App:** TypeScript + **Expo ~54** (React Native) — iOS / Android / web; production web on EAS Hosting.
+- **Database & auth:** **Supabase** — PostgreSQL, email/password + Google, dashboard, Row Level Security.
+- **Product lookup:** **Open Food Facts** API (free, community barcode database; coverage gaps expected).
+- **Label fallback:** on-device **OCR** (Tesseract.js) from a photo of the ingredients list.
 - **Future:** Crowdsourced ingredient submissions moderated in Supabase.
 
 ---
@@ -73,13 +74,18 @@ Selector superior: **Login** | **Regístrate**.
 #### 3.1.2 Modo amigo (`/language?mode=guest`)
 
 1. Usuario elige idioma UI.
-2. Sesión **solo en memoria** (`isGuest: true`) — avoid-list e ingredientes custom no se escriben en AsyncStorage.
+2. Sesión `isGuest: true` en memoria; en **web** la avoid-list y los customs se espejan en `sessionStorage` para sobrevivir un refresh de la pestaña.
 3. Navega a `/preferences` → puede buscar ingredientes, escanear, etc.
-4. **Al cerrar la app**, todos los datos de invitado se pierden.
+4. Al **cerrar la pestaña/app** (o salir del modo amigo), los datos de invitado se pierden. No se sincronizan a Supabase.
 
 #### 3.1.3 Preferencias / ingredientes (`/preferences`)
 
-Flujo común tras login, registro o modo amigo: autocomplete de ingredientes, lista de evitar, botón **Ir a escanear**.
+Flujo común tras login, registro o modo amigo:
+
+- Autocomplete del catálogo seed + customs propios.
+- Añadir / quitar de la lista a evitar con escrituras **por ítem** (`addAvoidIngredient` / `removeAvoidIngredient`), encoladas para evitar carreras.
+- Si no está en el catálogo: enlace bajo el buscador → crear custom (`custom-<uuid>`) + insert en Supabase con `created_by` (usuario autenticado) o solo local/guest.
+- Botón **Ir a escanear**.
 
 ---
 
@@ -100,41 +106,51 @@ Under that account, the user creates one or more **family profiles**, each with:
 - A couple shares one login; profiles **Ana** and **Pierre** keep separate intolerance lists.
 - Switching profile in **Preferences** changes which avoid-list is edited and which list is used on **Scan**.
 
-**MVP (local):** profiles and avoid-lists are stored on device per account. Ingredient **catalog** stays in app code (`ingredients.seed.ts`).
+**Current:** with Supabase configured, `family_profiles` + `user_avoid_ingredients` sync under `auth.users`. Ingredient **catalog** remains seeded from app code (`ingredients.seed.ts`) and must stay in sync with `public.ingredients` (FK). Local AsyncStorage fallback still exists when cloud is disabled.
 
-**Future (Supabase):** sync `family_profiles` and `user_avoid_ingredients` per profile under `auth.users`.
+On cloud login (`ensureCloudAccountSession`): ensure a default family profile exists; run **one-shot** orphan avoid-list recovery (copy rows from stale profile ids onto the active profile). Recovery must **not** run inside `getAvoidList` reads.
 
 ### 3.2 Scan
 
-1. Open **Scan** tab/screen — camera viewfinder for barcode (EAN-13, UPC).
-2. Fetch product from Open Food Facts → parse `ingredients_text` (+ allergens if present).
-3. Compare against the **active family profile’s** avoid-list (all language synonyms).
-4. Show **product name**, **OK** (green check) or **Not OK** (red X), list of **matched** avoid ingredients.
-5. If unknown token in label → prompt: *“Term not found. Add to global dictionary?”* → optional user submission (moderation queue).
+1. Open **Scan** — camera / web barcode scanner (EAN-13, UPC, etc.) or manual barcode entry on web.
+2. Fetch product from Open Food Facts (`api/v2`, ~10s timeout) → parse localized `ingredients_text`, `allergens_tags`, `ingredients_tags`, `traces_tags`, categories.
+3. Expand the active avoid-list (e.g. milk → whey/casein…; gluten/wheat → barley/rye/malt…; tree-nuts → almond…).
+4. Match text + tags against the catalog (short terms use word-boundary only). Broad OFF tags also match when the user avoids a more specific child (e.g. avoid `almond` ↔ tag `en:nuts`).
+5. Result rules (safety-first):
+   - **Matched avoid ingredient** → NOT SAFE (list matches).
+   - **Traces only** (“may contain”) → NOT SAFE / warning with may-contain list.
+   - **No ingredients text** and no positive tag/trace hit → inconclusive (`no_ingredients`) — offer manual entry + **photo OCR**.
+   - **Barcode missing / network** → `product_not_found` / `network_error` with retry; still offer manual / OCR when appropriate.
+   - **Allergen tags alone never yield SAFE** without ingredient text.
+6. **Photo OCR fallback** (`expo-image-picker` + Tesseract.js): user photographs the ingredients block; OCR fills the text field (editable); then the same `checkIngredientsText` path runs. Languages follow UI lang (e.g. `ita+eng` for Italian).
+7. Optional unknown-token prompt for dictionary growth (moderation queue future).
+
+**Coverage note:** many local Italian / regional SKUs are absent from Open Food Facts. That is expected; OCR/manual is the supported path until the barcode exists in OFF.
 
 ### 3.3 Growth / community
 
 - Users can propose new ingredient entries or aliases.
 - Admin reviews in Supabase (or simple `status: pending | approved`).
 - Optional: fuzzy spell-check (“blue laguna” → suggest “blue lagoon” / reject).
+- Optional: deep-link users to contribute missing barcodes to Open Food Facts.
 
 ---
 
 ## 4. Data model
 
-### 4.1 In the app (MVP)
+### 4.1 In the app
 
 | Data | Storage |
 |------|---------|
-| Ingredient catalog (multilingual) | Code: `src/data/ingredients.seed.ts` |
+| Ingredient catalog (multilingual) | Code: `src/data/ingredients.seed.ts` (+ owned `custom-%` from cloud/local) |
 | Registered account session | AsyncStorage + Supabase Auth |
-| Guest session + avoid-list + custom ingredients | **In-memory only** (cleared on app close) |
-| Account email + password hash (local fallback) | Device (AsyncStorage) |
-| Account nickname | Device / `profiles.account_nickname` |
-| Family profiles (id, display name) | Device / `family_profiles` table |
-| Avoid-list per profile | Device / `user_avoid_ingredients` keyed by profile |
+| Guest session + avoid-list + customs | Memory; web also `sessionStorage` for refresh |
+| Account email + password hash (local fallback) | Device (AsyncStorage) when Supabase off |
+| Account nickname | `profiles.account_nickname` |
+| Family profiles | `family_profiles` (ensured on login) |
+| Avoid-list per profile | `user_avoid_ingredients`; local key per email+profile as fallback |
 
-### 4.2 Supabase (target)
+### 4.2 Supabase (current)
 
 ```sql
 -- users handled by auth.users
@@ -142,7 +158,7 @@ Under that account, the user creates one or more **family profiles**, each with:
 profiles (
   id uuid PK references auth.users,
   email text,
-  account_nickname text not null,   -- e.g. "Carlos", household owner display name
+  account_nickname text not null,
   ui_language text default 'en',
   created_at timestamptz
 )
@@ -150,7 +166,7 @@ profiles (
 family_profiles (
   id uuid PK default gen_random_uuid(),
   account_id uuid not null references public.profiles(id) on delete cascade,
-  display_name text not null,       -- e.g. "Lucía", "Mom", child or partner name
+  display_name text not null,
   created_at timestamptz not null default now()
 )
 
@@ -163,11 +179,12 @@ user_avoid_ingredients (
 )
 
 ingredients (
-  id text PK,           -- slug e.g. corn-starch
-  category text,        -- sugars, starches, flours, allergens, fruits, ...
-  labels jsonb,         -- { "en": "...", "fr": "...", "ar": "..." }
+  id text PK,              -- seed slug OR custom-<uuid>
+  category text,
+  labels jsonb,
   aliases text[],
-  status text default 'approved'  -- approved | pending
+  status text default 'approved',
+  created_by uuid null references auth.users(id) on delete set null  -- customs only
 )
 
 ingredient_submissions (
@@ -179,26 +196,27 @@ ingredient_submissions (
   created_at timestamptz
 )
 
-scan_history (optional v2) (
-  id uuid PK,
-  user_id uuid,
-  barcode text,
-  product_name text,
-  result text,          -- ok | not_ok | unknown
-  matched text[],
-  scanned_at timestamptz
-)
+-- optional future
+scan_history (...)
 ```
 
-**Row Level Security:** users read global `ingredients` where `status = approved`; read/write only their own `profiles`, `family_profiles`, and `user_avoid_ingredients` (via profiles they own).
+**Row Level Security (after `security-hardening.sql`):**
+
+- Seed ingredients (`id` not like `custom-%`, `status = approved`): readable by everyone.
+- Custom ingredients: **select/insert only when `created_by = auth.uid()`**. No update policy (ids are unique UUIDs — never overwrite another user’s row).
+- `profiles` / `family_profiles` updates: `using` + `with check` so `id` / `account_id` cannot be reassigned.
+- Avoid-list: read/write only for family profiles owned by the user.
+
+**Client write rules:** prefer upsert-ignore / delete-by-id for avoid rows; skip unknown ingredient ids instead of failing the whole batch; never delete-all-then-reinsert.
 
 ---
 
 ## 5. Ingredient database
 
-- **Seed:** 150+ canonical ingredients across categories: sugars, sugar alcohols, starches, flours, gluten grains, nuts, dairy, eggs, soy, fish, meat, fruits, vegetables, herbs, additives (E-numbers mapped where useful).
-- **Languages in seed:** English, French, German, Spanish, Italian, Portuguese, Russian, Arabic (expand over time).
-- **Matching:** normalize (lowercase, strip punctuation), substring + word-boundary check on concatenated label text from product.
+- **Seed:** 270+ canonical ingredients (sugars, sugar alcohols, starches, flours, gluten grains, nuts, dairy, eggs, soy, fish/seafood, meats, fruits, vegetables, herbs, additives / E-numbers).
+- **Languages in seed:** English, French, German, Spanish, Italian, Portuguese, Russian, Arabic, Catalan.
+- **Matching:** normalize (lowercase, diacritics), word-boundary for short terms (≥2), longer terms with boundary preference; OFF tag map + reverse hierarchy (specific avoid ↔ broad allergen tag).
+- **Ops:** keep `seed-ingredients.sql` regenerated from the TS seed whenever the catalog changes.
 
 ---
 
@@ -209,17 +227,18 @@ scan_history (optional v2) (
 | Welcome | `/` | Branding; **Login / Regístrate**; **Entra como amigo** |
 | Login | `/login` | Toggle Login / Regístrate; auth Supabase o local |
 | Language | `/language?mode=guest` | Idioma solo para modo amigo |
-| Preferences | `/preferences` | Ingredientes a evitar (post-login o post-amigo) |
-| Scan | `/scan` | Barcode + result |
+| Preferences | `/preferences` | Avoid list, custom ingredient, sign out |
+| Scan | `/scan` | Barcode + result + manual / **photo OCR** fallback |
+| Auth callback / reset | `/auth/*` | OAuth return + password reset |
 
 ---
 
 ## 7. Non-functional requirements
 
-- Offline: cached avoid-list + local ingredient index; scan needs network for barcode API.
-- Performance: ingredient search < 100ms on device (in-memory index).
-- Security: Supabase Auth; never store plaintext passwords in custom tables.
-- Accessibility: sufficient contrast for red/green; don’t rely on color alone (icons + text).
+- Offline: local catalog + avoid-list cache; barcode lookup and first OCR language packs need network.
+- Performance: ingredient search &lt; 100ms on device (in-memory index); OFF fetch timeout ~10s; OCR may take several seconds on first run (download traineddata).
+- Security: Supabase Auth; owned customs; queued avoid writes; no plaintext passwords in custom tables; clear ingredient cache on sign-out.
+- Accessibility: sufficient contrast for red/green/amber; don’t rely on color alone (icons + text).
 
 ---
 
@@ -227,10 +246,9 @@ scan_history (optional v2) (
 
 | Phase | Scope |
 |-------|--------|
-| **MVP (current repo)** | Local auth fallback, seed DB, scan + OFF API, web/iOS/Android via Expo |
-| **v1.1** | Supabase auth + sync family profiles and avoid-lists |
-| **v1.2** | Submission queue + admin approval |
-| **v2** | OCR ingredient photo, scan history, offline product cache |
+| **Done (current)** | Supabase auth + synced avoid-lists, hardening RLS, SAFE rules, OCR label photo, web production on EAS |
+| **Next** | Scan history per profile; stronger OCR / Vision; contribute-to-OFF deep link |
+| **Later** | Submission queue + admin approval; offline product cache |
 | **Store** | EAS Build, privacy policy, App Store / Play Console listings |
 
 ---
@@ -239,12 +257,12 @@ scan_history (optional v2) (
 
 Display on scan result:
 
-> *Come Tranki provides informational suggestions based on barcode databases and your settings. Always read the physical package and consult a healthcare professional for allergies.*
+> *Safe Bite provides informational suggestions based on barcode databases and your settings. Always read the physical package and consult a healthcare professional for allergies.*
 
 ---
 
 ## 10. Branding (Welcome screen)
 
 - Background: supermarket shelf gradient (warm lights, product silhouettes).
-- Foreground: comic “boom” burst with **Come Tranki** wordmark.
+- Foreground: comic “boom” burst with **Safe Bite** wordmark.
 - Primary CTA: green **Enter** button; secondary: **Login**.
